@@ -2,389 +2,271 @@ import streamlit as st
 import requests
 import pandas as pd
 import plotly.express as px
-from itertools import combinations
 
-st.set_page_config(page_title="Meta Ads AI Command Center", layout="wide")
-
-# ---------- UI STYLE ----------
-
-st.markdown("""
-<style>
-
-body {background-color:#0f172a;}
-
-.block-container {padding-top:1rem;}
-
-.metric-card{
-background:#111827;
-padding:20px;
-border-radius:14px;
-box-shadow:0 6px 20px rgba(0,0,0,0.4);
-}
-
-.metric-title{color:#9ca3af;font-size:13px;}
-
-.metric-value{font-size:30px;font-weight:700;color:white;}
-
-</style>
-""",unsafe_allow_html=True)
+st.set_page_config(layout="wide")
 
 st.title("🚀 Meta Ads AI Command Center")
 
-# ---------- MULTI ACCOUNT CONFIG ----------
+API="https://graph.facebook.com/v19.0"
 
-accounts = [
-{
-"account_id":"act_830580884293323",
-"access_token":"EAAV8gZAY7XdEBQ4emqP8U86yJZC0aLVWMmqmbiTbS7A0KQlRsV2lqQOxgnZBVLJmFwYFabb6wet3NPmklpmflLlqDCmS47kCCi7fA2WNvOJkqjHm6Hn4GjYaeQTjzrM9Y2OrXVgCA1c8Kpvwqx9jO5JgPZAYatrZBHd2iKyJ0nvWtARR5m9u0lX4BIjk8rDwjTEWD6ZAWqUNgNsv5J820iZCrRkiuo2xCo8MKmU"
-},
-{
-"account_id":"act_415698175733898",
-"access_token":"EAAV8gZAY7XdEBQ4emqP8U86yJZC0aLVWMmqmbiTbS7A0KQlRsV2lqQOxgnZBVLJmFwYFabb6wet3NPmklpmflLlqDCmS47kCCi7fA2WNvOJkqjHm6Hn4GjYaeQTjzrM9Y2OrXVgCA1c8Kpvwqx9jO5JgPZAYatrZBHd2iKyJ0nvWtARR5m9u0lX4BIjk8rDwjTEWD6ZAWqUNgNsv5J820iZCrRkiuo2xCo8MKmU"
-}
-]
+# -------- LOGIN --------
 
-# ---------- FETCH ACCOUNT NAMES ----------
+st.sidebar.header("Connect Meta")
 
-account_map={}
+token=st.sidebar.text_input("Access Token")
 
-for acc in accounts:
+if not token:
+    st.warning("Enter Meta Access Token")
+    st.stop()
 
-    url=f"https://graph.facebook.com/v19.0/{acc['account_id']}"
+# -------- FETCH AD ACCOUNTS --------
 
-    params={
-    "fields":"name,currency",
-    "access_token":acc["access_token"]
-    }
+accounts_url=f"{API}/me/adaccounts"
 
-    res=requests.get(url,params=params).json()
+accounts=requests.get(accounts_url,params={
+"fields":"name,account_id,currency",
+"access_token":token
+}).json()
 
-    name=res.get("name",acc["account_id"])
+if "data" not in accounts:
+    st.error("Token invalid or permission missing")
+    st.stop()
 
-    account_map[name]={
-    "account_id":acc["account_id"],
-    "access_token":acc["access_token"],
-    "currency":res.get("currency","USD")
-    }
+account_names=[a["name"] for a in accounts["data"]]
 
-selected_account=st.sidebar.selectbox("Ad Account",list(account_map.keys()))
+selected=st.sidebar.selectbox("Ad Account",account_names)
 
-ACCESS_TOKEN=account_map[selected_account]["access_token"]
-AD_ACCOUNT=account_map[selected_account]["account_id"]
-CURRENCY=account_map[selected_account]["currency"]
+account_id=None
+currency="USD"
 
-# ---------- FILTERS ----------
+for a in accounts["data"]:
+    if a["name"]==selected:
+        account_id=a["account_id"]
+        currency=a["currency"]
 
-date_preset=st.sidebar.selectbox(
+# -------- DATE FILTER --------
+
+date=st.sidebar.selectbox(
 "Date Range",
 ["today","yesterday","last_7d","last_30d"]
 )
 
-level=st.sidebar.selectbox(
-"Level",
-["campaign","adset","ad"]
-)
+# -------- FETCH INSIGHTS --------
 
-# ---------- FETCH INSIGHTS ----------
+fields="""
+campaign_name,
+adset_name,
+ad_name,
+spend,
+ctr,
+cpc,
+cpm,
+frequency,
+reach,
+impressions,
+clicks,
+unique_clicks,
+landing_page_views,
+video_plays,
+actions
+"""
 
-fields="campaign_name,adset_name,ad_name,spend,ctr,cpc,cpm,frequency,impressions,clicks,actions"
+url=f"{API}/act_{account_id}/insights"
 
-url=f"https://graph.facebook.com/v19.0/{AD_ACCOUNT}/insights"
-
-params={
-"level":level,
+data=requests.get(url,params={
+"level":"ad",
 "fields":fields,
-"date_preset":date_preset,
-"access_token":ACCESS_TOKEN
-}
+"date_preset":date,
+"access_token":token
+}).json()
 
-data=requests.get(url,params=params).json().get("data",[])
-
-if not data:
-    st.error("No data returned from Meta API")
+if "data" not in data:
+    st.error("No insights data")
     st.stop()
 
-df=pd.DataFrame(data)
+df=pd.DataFrame(data["data"])
 
-# ---------- CLEAN NUMERIC DATA ----------
+# -------- CLEAN DATA --------
 
-num_cols=["spend","ctr","cpc","cpm","frequency","impressions","clicks"]
+nums=[
+"spend","ctr","cpc","cpm","frequency",
+"reach","impressions","clicks"
+]
 
-for c in num_cols:
-    if c in df.columns:
-        df[c]=pd.to_numeric(df[c])
+for n in nums:
+    if n in df:
+        df[n]=pd.to_numeric(df[n])
 
-# ---------- KPI DASHBOARD ----------
+# -------- KPI --------
 
 c1,c2,c3,c4=st.columns(4)
 
-with c1:
-    st.markdown(f"""
-<div class="metric-card">
-<div class="metric-title">Total Spend</div>
-<div class="metric-value">{CURRENCY} {df['spend'].sum():,.0f}</div>
-</div>
-""",unsafe_allow_html=True)
+c1.metric("Spend",f"{currency} {df.spend.sum():.0f}")
+c2.metric("CTR",f"{df.ctr.mean():.2f}%")
+c3.metric("CPC",f"{currency} {df.cpc.mean():.2f}")
+c4.metric("CPM",f"{currency} {df.cpm.mean():.2f}")
 
-with c2:
-    st.markdown(f"""
-<div class="metric-card">
-<div class="metric-title">Avg CTR</div>
-<div class="metric-value">{df['ctr'].mean():.2f}%</div>
-</div>
-""",unsafe_allow_html=True)
+# -------- SPEND CHART --------
 
-with c3:
-    st.markdown(f"""
-<div class="metric-card">
-<div class="metric-title">Avg CPC</div>
-<div class="metric-value">{CURRENCY} {df['cpc'].mean():.2f}</div>
-</div>
-""",unsafe_allow_html=True)
+fig=px.bar(df,x="campaign_name",y="spend")
 
-with c4:
-    st.markdown(f"""
-<div class="metric-card">
-<div class="metric-title">Avg CPM</div>
-<div class="metric-value">{CURRENCY} {df['cpm'].mean():.2f}</div>
-</div>
-""",unsafe_allow_html=True)
+st.plotly_chart(fig,use_container_width=True)
 
-st.divider()
+# -------- HEALTH SCORE --------
 
-# ---------- CAMPAIGN CHARTS ----------
-
-if "campaign_name" in df.columns:
-
-    col1,col2=st.columns(2)
-
-    fig=px.bar(df,x="campaign_name",y="spend",title="Campaign Spend")
-    col1.plotly_chart(fig,use_container_width=True)
-
-    fig=px.bar(df,x="campaign_name",y="ctr",title="Campaign CTR")
-    col2.plotly_chart(fig,use_container_width=True)
-
-st.divider()
-
-# ---------- HEALTH SCORE ----------
-
-def health(row):
+def health(r):
 
     score=100
 
-    if row["ctr"]<1:
+    if r["ctr"]<1:
         score-=30
 
-    if row["cpc"]>2:
+    if r["cpc"]>2:
         score-=20
 
-    if row["cpm"]>20:
+    if r["cpm"]>20:
         score-=20
 
-    if row["frequency"]>3:
+    if r["frequency"]>3:
         score-=10
 
     return score
 
-df["health_score"]=df.apply(health,axis=1)
+df["health"]=df.apply(health,axis=1)
 
 st.subheader("Campaign Health")
 
-st.dataframe(df[[
-"campaign_name",
-"spend",
-"ctr",
-"cpc",
-"cpm",
-"frequency",
-"health_score"
-]])
+st.dataframe(df)
 
-# ---------- CREATIVE FATIGUE ----------
+# -------- AI SCALING ENGINE --------
 
-st.subheader("Creative Fatigue Detection")
+def action(r):
 
-fatigue=df[(df["frequency"]>3)&(df["ctr"]<1.5)]
-
-for _,row in fatigue.iterrows():
-
-    st.warning(f"{row['campaign_name']} → Creative fatigue detected")
-
-# ---------- AI BUDGET ALLOCATOR ----------
-
-st.subheader("AI Budget Allocator")
-
-df["budget_action"]="Monitor"
-
-df.loc[(df["ctr"]>2)&(df["cpc"]<1),"budget_action"]="Increase Budget 20%"
-df.loc[(df["ctr"]<0.8),"budget_action"]="Reduce Budget"
-
-st.dataframe(df[["campaign_name","budget_action"]])
-
-# ---------- CPA ANOMALY ----------
-
-st.subheader("CPA Anomaly Alerts")
-
-df["CPA"]=df["spend"]/df["clicks"]
-
-df["CPA_change"]=df["CPA"].pct_change()
-
-alerts=df[df["CPA_change"]>0.5]
-
-for _,row in alerts.iterrows():
-
-    st.error(f"CPA spike detected in {row['campaign_name']}")
-
-# ---------- CREATIVE WINNER ----------
-
-st.subheader("Creative Winner Detection")
-
-winners=df[(df["ctr"]>2.5)&(df["cpc"]<1)]
-
-st.dataframe(winners)
-
-# ---------- AUTOMATED SCALING ----------
-
-st.subheader("Scaling Engine")
-
-def scaling(row):
-
-    if row["ctr"]>2 and row["cpc"]<1:
+    if r["ctr"]>2 and r["cpc"]<1:
         return "Scale Budget"
 
-    if row["ctr"]<1:
-        return "Refresh Creative"
+    if r["ctr"]<1:
+        return "Creative Issue"
 
-    if row["cpm"]>20:
-        return "Expand Audience"
+    if r["cpm"]>20:
+        return "Audience Too Narrow"
+
+    if r["frequency"]>3:
+        return "Creative Fatigue"
 
     return "Monitor"
 
-df["AI_action"]=df.apply(scaling,axis=1)
+df["AI_Action"]=df.apply(action,axis=1)
 
-st.dataframe(df[["campaign_name","AI_action"]])
+st.subheader("AI Optimization")
 
-# ---------- AUDIENCE HEATMAP ----------
+st.dataframe(df[[
+"campaign_name",
+"AI_Action"
+]])
 
-st.subheader("Audience Heatmap")
+# -------- CREATIVE FATIGUE --------
 
-break_url=f"https://graph.facebook.com/v19.0/{AD_ACCOUNT}/insights"
+st.subheader("Creative Fatigue")
 
-break_params={
-"breakdowns":"age,gender",
-"fields":"impressions,ctr",
-"date_preset":date_preset,
-"access_token":ACCESS_TOKEN
-}
+fatigue=df[(df.frequency>3)&(df.ctr<1.5)]
 
-age_data=requests.get(break_url,params=break_params).json().get("data",[])
+st.dataframe(fatigue)
 
-if age_data:
+# -------- WINNING CREATIVES --------
 
-    heat_df=pd.DataFrame(age_data)
+st.subheader("Creative Winners")
 
-    fig=px.density_heatmap(
-    heat_df,
-    x="age",
-    y="gender",
-    z="ctr"
-    )
+winners=df[(df.ctr>2.5)&(df.cpc<1)]
 
-    st.plotly_chart(fig)
+st.dataframe(winners)
 
-# ---------- GEO ANALYZER ----------
+# -------- LANDING PAGE ANALYZER --------
 
-st.subheader("Geo Performance")
+st.subheader("Landing Page Issues")
 
-geo_params={
-"breakdowns":"country",
-"fields":"country,ctr",
-"date_preset":date_preset,
-"access_token":ACCESS_TOKEN
-}
+df["CVR"]=df["clicks"]/df["impressions"]
 
-geo_data=requests.get(break_url,params=geo_params).json().get("data",[])
+lp=df[(df.ctr>2)&(df.CVR<0.02)]
 
-if geo_data:
+st.dataframe(lp)
 
-    geo_df=pd.DataFrame(geo_data)
+# -------- TARGETING FETCH --------
 
-    fig=px.bar(geo_df,x="country",y="ctr")
+st.subheader("Adset Targeting")
 
-    st.plotly_chart(fig)
+target_url=f"{API}/act_{account_id}/adsets"
 
-# ---------- AUDIENCE OVERLAP ----------
-
-st.subheader("Audience Overlap Detector")
-
-url=f"https://graph.facebook.com/v19.0/{AD_ACCOUNT}/adsets"
-
-params={
+targeting=requests.get(target_url,params={
 "fields":"name,targeting",
-"access_token":ACCESS_TOKEN
-}
+"limit":200,
+"access_token":token
+}).json()
 
-adsets=requests.get(url,params=params).json().get("data",[])
+if "data" in targeting:
 
-audiences={}
+    for ad in targeting["data"][:10]:
 
-for ad in adsets:
+        st.write("###",ad["name"])
 
-    interests=ad.get("targeting",{}).get("interests",[])
+        t=ad.get("targeting",{})
 
-    audiences[ad["name"]]=[i["name"] for i in interests]
+        interests=t.get("interests",[])
 
-for a,b in combinations(audiences.keys(),2):
+        for i in interests:
 
-    overlap=len(set(audiences[a])&set(audiences[b]))
+            st.write("•",i["name"])
 
-    if overlap>3:
+# -------- INTEREST FINDER --------
 
-        st.warning(f"Audience overlap between {a} and {b}")
-
-# ---------- TARGETING CHANGE TRACKER ----------
-
-st.subheader("Targeting Change Tracker")
-
-for ad in adsets[:10]:
-
-    st.write(f"{ad['name']}")
-
-# ---------- META INTEREST FINDER ----------
-
-st.subheader("Meta Interest Finder")
+st.subheader("Detailed Targeting Finder")
 
 keyword=st.text_input("Search Interest")
 
 if keyword:
 
-    url="https://graph.facebook.com/v19.0/search"
-
+    interest=requests.get(
+    f"{API}/search",
     params={
     "type":"adinterest",
     "q":keyword,
-    "limit":20,
-    "access_token":ACCESS_TOKEN
-    }
+    "limit":50,
+    "access_token":token
+    }).json()
 
-    interests=requests.get(url,params=params).json().get("data",[])
+    if "data" in interest:
 
-    for i in interests:
+        for i in interest["data"]:
 
-        st.write(f"{i['name']} — Audience {i.get('audience_size','N/A')}")
+            st.write(
+            i["name"],
+            "- Audience:",
+            i.get("audience_size","N/A")
+            )
 
-# ---------- LANDING PAGE ANALYZER ----------
+# -------- AUDIENCE OVERLAP --------
 
-st.subheader("Landing Page Performance")
+st.subheader("Audience Overlap Detector")
 
-if "clicks" in df.columns:
+aud={}
 
-    df["CVR"]=0
+if "data" in targeting:
 
-    df.loc[df["clicks"]>0,"CVR"]=df["clicks"]/df["impressions"]
+    for ad in targeting["data"]:
 
-    lp=df[(df["ctr"]>2)&(df["CVR"]<0.02)]
+        ints=ad.get("targeting",{}).get("interests",[])
 
-    for _,row in lp.iterrows():
+        aud[ad["name"]]=[i["name"] for i in ints]
 
-        st.warning(f"{row['campaign_name']} → Landing page issue")
+    names=list(aud.keys())
+
+    for i in range(len(names)):
+        for j in range(i+1,len(names)):
+
+            overlap=set(aud[names[i]]) & set(aud[names[j]])
+
+            if len(overlap)>3:
+
+                st.warning(
+                f"Overlap between {names[i]} and {names[j]}"
+                )
