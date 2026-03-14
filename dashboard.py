@@ -6,39 +6,28 @@ from itertools import combinations
 
 st.set_page_config(page_title="Meta Ads AI Command Center", layout="wide")
 
-# ---------- MODERN UI ----------
+# ---------- UI STYLE ----------
 
 st.markdown("""
 <style>
 
-body {
-background-color:#0f172a;
-color:white;
-}
+body {background-color:#0f172a;}
 
-.block-container{
-padding-top:1rem;
-}
+.block-container {padding-top:1rem;}
 
 .metric-card{
 background:#111827;
 padding:20px;
 border-radius:14px;
-box-shadow:0 6px 25px rgba(0,0,0,0.4);
+box-shadow:0 6px 20px rgba(0,0,0,0.4);
 }
 
-.metric-title{
-color:#9ca3af;
-font-size:13px;
-}
+.metric-title{color:#9ca3af;font-size:13px;}
 
-.metric-value{
-font-size:28px;
-font-weight:700;
-}
+.metric-value{font-size:30px;font-weight:700;color:white;}
 
 </style>
-""", unsafe_allow_html=True)
+""",unsafe_allow_html=True)
 
 st.title("🚀 Meta Ads AI Command Center")
 
@@ -46,88 +35,88 @@ st.title("🚀 Meta Ads AI Command Center")
 
 accounts = [
 {
-"account_id":"act_415698175733898",
+"account_id":"act_830580884293323",
 "access_token":"EAAV8gZAY7XdEBQ7qsPauJ5ewD8NwX4HF40bqZBaYNZAQKAL0wdCgA9y1YL9jYwTZCUEpyNNU9N3zgUZBr5Ty3gcMGShxbEW8FtonsalL6pSiRZCWY6ZAlhjTnUIhpeLHHrsuXlvdRCo6ZBdu9OpE8Xf7zDs4KixzLskgntEmaIZBA3jzYO3a2idZCi5I8pusy8CX2D0TZCrQWeRaGZB3il4Wrdxp9lzxAME3NMggnZBxLZC0OQns46J7SKRhgmFYaqDc4V7ZCU62wUwikoFnZC0O5F3q3kDJUydHswZDZD"
 },
 {
-"account_id":"act_830580884293323",
+"account_id":"act_415698175733898",
 "access_token":"EAAV8gZAY7XdEBQ7qsPauJ5ewD8NwX4HF40bqZBaYNZAQKAL0wdCgA9y1YL9jYwTZCUEpyNNU9N3zgUZBr5Ty3gcMGShxbEW8FtonsalL6pSiRZCWY6ZAlhjTnUIhpeLHHrsuXlvdRCo6ZBdu9OpE8Xf7zDs4KixzLskgntEmaIZBA3jzYO3a2idZCi5I8pusy8CX2D0TZCrQWeRaGZB3il4Wrdxp9lzxAME3NMggnZBxLZC0OQns46J7SKRhgmFYaqDc4V7ZCU62wUwikoFnZC0O5F3q3kDJUydHswZDZD"
 }
 ]
 
 # ---------- FETCH ACCOUNT NAMES ----------
 
-account_map = {}
+account_map={}
 
 for acc in accounts:
 
-    url = f"https://graph.facebook.com/v19.0/{acc['account_id']}"
+    url=f"https://graph.facebook.com/v19.0/{acc['account_id']}"
 
-    params = {
-        "fields":"name,currency",
-        "access_token":acc["access_token"]
+    params={
+    "fields":"name,currency",
+    "access_token":acc["access_token"]
     }
 
-    res = requests.get(url,params=params).json()
+    res=requests.get(url,params=params).json()
 
-    name = res.get("name",acc["account_id"])
+    name=res.get("name",acc["account_id"])
 
-    account_map[name] = {
-        "account_id":acc["account_id"],
-        "access_token":acc["access_token"],
-        "currency":res.get("currency","USD")
+    account_map[name]={
+    "account_id":acc["account_id"],
+    "access_token":acc["access_token"],
+    "currency":res.get("currency","USD")
     }
 
-selected_account = st.sidebar.selectbox("Select Account", list(account_map.keys()))
+selected_account=st.sidebar.selectbox("Ad Account",list(account_map.keys()))
 
-ACCESS_TOKEN = account_map[selected_account]["access_token"]
-AD_ACCOUNT = account_map[selected_account]["account_id"]
-CURRENCY = account_map[selected_account]["currency"]
+ACCESS_TOKEN=account_map[selected_account]["access_token"]
+AD_ACCOUNT=account_map[selected_account]["account_id"]
+CURRENCY=account_map[selected_account]["currency"]
 
 # ---------- FILTERS ----------
 
-date_preset = st.sidebar.selectbox(
+date_preset=st.sidebar.selectbox(
 "Date Range",
 ["today","yesterday","last_7d","last_30d"]
 )
 
-level = st.sidebar.selectbox(
+level=st.sidebar.selectbox(
 "Level",
 ["campaign","adset","ad"]
 )
 
 # ---------- FETCH INSIGHTS ----------
 
-fields = "campaign_name,adset_name,ad_name,spend,ctr,cpc,cpm,frequency,impressions,clicks,actions"
+fields="campaign_name,adset_name,ad_name,spend,ctr,cpc,cpm,frequency,impressions,clicks,actions"
 
-url = f"https://graph.facebook.com/v19.0/{AD_ACCOUNT}/insights"
+url=f"https://graph.facebook.com/v19.0/{AD_ACCOUNT}/insights"
 
-params = {
+params={
 "level":level,
 "fields":fields,
 "date_preset":date_preset,
 "access_token":ACCESS_TOKEN
 }
 
-data = requests.get(url,params=params).json().get("data",[])
+data=requests.get(url,params=params).json().get("data",[])
 
 if not data:
-    st.error("No data returned from Meta")
+    st.error("No data returned from Meta API")
     st.stop()
 
-df = pd.DataFrame(data)
+df=pd.DataFrame(data)
 
-# ---------- CLEAN DATA ----------
+# ---------- CLEAN NUMERIC DATA ----------
 
-num_cols = ["spend","ctr","cpc","cpm","frequency","impressions","clicks"]
+num_cols=["spend","ctr","cpc","cpm","frequency","impressions","clicks"]
 
 for c in num_cols:
     if c in df.columns:
-        df[c] = pd.to_numeric(df[c])
+        df[c]=pd.to_numeric(df[c])
 
 # ---------- KPI DASHBOARD ----------
 
-c1,c2,c3,c4 = st.columns(4)
+c1,c2,c3,c4=st.columns(4)
 
 with c1:
     st.markdown(f"""
@@ -135,44 +124,44 @@ with c1:
 <div class="metric-title">Total Spend</div>
 <div class="metric-value">{CURRENCY} {df['spend'].sum():,.0f}</div>
 </div>
-""", unsafe_allow_html=True)
+""",unsafe_allow_html=True)
 
 with c2:
     st.markdown(f"""
 <div class="metric-card">
-<div class="metric-title">Average CTR</div>
+<div class="metric-title">Avg CTR</div>
 <div class="metric-value">{df['ctr'].mean():.2f}%</div>
 </div>
-""", unsafe_allow_html=True)
+""",unsafe_allow_html=True)
 
 with c3:
     st.markdown(f"""
 <div class="metric-card">
-<div class="metric-title">Average CPC</div>
+<div class="metric-title">Avg CPC</div>
 <div class="metric-value">{CURRENCY} {df['cpc'].mean():.2f}</div>
 </div>
-""", unsafe_allow_html=True)
+""",unsafe_allow_html=True)
 
 with c4:
     st.markdown(f"""
 <div class="metric-card">
-<div class="metric-title">Average CPM</div>
+<div class="metric-title">Avg CPM</div>
 <div class="metric-value">{CURRENCY} {df['cpm'].mean():.2f}</div>
 </div>
-""", unsafe_allow_html=True)
+""",unsafe_allow_html=True)
 
 st.divider()
 
-# ---------- CHARTS ----------
+# ---------- CAMPAIGN CHARTS ----------
 
 if "campaign_name" in df.columns:
 
-    col1,col2 = st.columns(2)
+    col1,col2=st.columns(2)
 
-    fig = px.bar(df,x="campaign_name",y="spend",title="Campaign Spend")
+    fig=px.bar(df,x="campaign_name",y="spend",title="Campaign Spend")
     col1.plotly_chart(fig,use_container_width=True)
 
-    fig = px.bar(df,x="campaign_name",y="ctr",title="Campaign CTR")
+    fig=px.bar(df,x="campaign_name",y="ctr",title="Campaign CTR")
     col2.plotly_chart(fig,use_container_width=True)
 
 st.divider()
@@ -181,23 +170,23 @@ st.divider()
 
 def health(row):
 
-    score = 100
+    score=100
 
-    if row["ctr"] < 1:
-        score -= 30
+    if row["ctr"]<1:
+        score-=30
 
-    if row["cpc"] > 2:
-        score -= 20
+    if row["cpc"]>2:
+        score-=20
 
-    if row["cpm"] > 20:
-        score -= 20
+    if row["cpm"]>20:
+        score-=20
 
-    if row["frequency"] > 3:
-        score -= 10
+    if row["frequency"]>3:
+        score-=10
 
     return score
 
-df["health_score"] = df.apply(health,axis=1)
+df["health_score"]=df.apply(health,axis=1)
 
 st.subheader("Campaign Health")
 
@@ -209,25 +198,19 @@ st.dataframe(df[[
 "cpm",
 "frequency",
 "health_score"
-]],use_container_width=True)
+]])
 
 # ---------- CREATIVE FATIGUE ----------
 
 st.subheader("Creative Fatigue Detection")
 
-fatigue = df[(df["frequency"]>3)&(df["ctr"]<1.5)]
+fatigue=df[(df["frequency"]>3)&(df["ctr"]<1.5)]
 
-if len(fatigue):
+for _,row in fatigue.iterrows():
 
-    for _,row in fatigue.iterrows():
+    st.warning(f"{row['campaign_name']} → Creative fatigue detected")
 
-        st.warning(f"{row['campaign_name']} → Creative fatigue detected")
-
-else:
-
-    st.success("No fatigue detected")
-
-# ---------- BUDGET ALLOCATOR ----------
+# ---------- AI BUDGET ALLOCATOR ----------
 
 st.subheader("AI Budget Allocator")
 
@@ -240,7 +223,7 @@ st.dataframe(df[["campaign_name","budget_action"]])
 
 # ---------- CPA ANOMALY ----------
 
-st.subheader("CPA Anomaly Detection")
+st.subheader("CPA Anomaly Alerts")
 
 df["CPA"]=df["spend"]/df["clicks"]
 
@@ -254,7 +237,7 @@ for _,row in alerts.iterrows():
 
 # ---------- CREATIVE WINNER ----------
 
-st.subheader("Creative Winners")
+st.subheader("Creative Winner Detection")
 
 winners=df[(df["ctr"]>2.5)&(df["cpc"]<1)]
 
@@ -262,12 +245,12 @@ st.dataframe(winners)
 
 # ---------- AUTOMATED SCALING ----------
 
-st.subheader("Scaling Recommendations")
+st.subheader("Scaling Engine")
 
 def scaling(row):
 
     if row["ctr"]>2 and row["cpc"]<1:
-        return "Scale 20%"
+        return "Scale Budget"
 
     if row["ctr"]<1:
         return "Refresh Creative"
@@ -277,9 +260,58 @@ def scaling(row):
 
     return "Monitor"
 
-df["scaling_signal"]=df.apply(scaling,axis=1)
+df["AI_action"]=df.apply(scaling,axis=1)
 
-st.dataframe(df[["campaign_name","scaling_signal"]])
+st.dataframe(df[["campaign_name","AI_action"]])
+
+# ---------- AUDIENCE HEATMAP ----------
+
+st.subheader("Audience Heatmap")
+
+break_url=f"https://graph.facebook.com/v19.0/{AD_ACCOUNT}/insights"
+
+break_params={
+"breakdowns":"age,gender",
+"fields":"impressions,ctr",
+"date_preset":date_preset,
+"access_token":ACCESS_TOKEN
+}
+
+age_data=requests.get(break_url,params=break_params).json().get("data",[])
+
+if age_data:
+
+    heat_df=pd.DataFrame(age_data)
+
+    fig=px.density_heatmap(
+    heat_df,
+    x="age",
+    y="gender",
+    z="ctr"
+    )
+
+    st.plotly_chart(fig)
+
+# ---------- GEO ANALYZER ----------
+
+st.subheader("Geo Performance")
+
+geo_params={
+"breakdowns":"country",
+"fields":"country,ctr",
+"date_preset":date_preset,
+"access_token":ACCESS_TOKEN
+}
+
+geo_data=requests.get(break_url,params=geo_params).json().get("data",[])
+
+if geo_data:
+
+    geo_df=pd.DataFrame(geo_data)
+
+    fig=px.bar(geo_df,x="country",y="ctr")
+
+    st.plotly_chart(fig)
 
 # ---------- AUDIENCE OVERLAP ----------
 
@@ -294,19 +326,17 @@ params={
 
 adsets=requests.get(url,params=params).json().get("data",[])
 
-interests_map={}
+audiences={}
 
 for ad in adsets:
 
     interests=ad.get("targeting",{}).get("interests",[])
 
-    names=[i["name"] for i in interests]
+    audiences[ad["name"]]=[i["name"] for i in interests]
 
-    interests_map[ad["name"]]=names
+for a,b in combinations(audiences.keys(),2):
 
-for a,b in combinations(interests_map.keys(),2):
-
-    overlap=len(set(interests_map[a])&set(interests_map[b]))
+    overlap=len(set(audiences[a])&set(audiences[b]))
 
     if overlap>3:
 
@@ -320,7 +350,7 @@ for ad in adsets[:10]:
 
     st.write(f"{ad['name']}")
 
-# ---------- INTEREST SUGGESTION ----------
+# ---------- META INTEREST FINDER ----------
 
 st.subheader("Meta Interest Finder")
 
@@ -347,11 +377,11 @@ if keyword:
 
 st.subheader("Landing Page Performance")
 
-if "actions" in df.columns:
+if "clicks" in df.columns:
 
-    df["conversions"]=df["actions"].apply(lambda x:0)
+    df["CVR"]=0
 
-    df["CVR"]=df["conversions"]/df["clicks"]
+    df.loc[df["clicks"]>0,"CVR"]=df["clicks"]/df["impressions"]
 
     lp=df[(df["ctr"]>2)&(df["CVR"]<0.02)]
 
