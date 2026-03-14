@@ -1,4 +1,8 @@
 streamlit
-requests
 pandas
+requests
 plotly
+scikit-learn
+firebase-admin
+fpdf
+numpy
