@@ -35,12 +35,12 @@ st.title("🚀 Meta Ads AI Command Center")
 
 accounts = [
 {
-"account_id":"act_XXXXXXXX",
-"access_token":"TOKEN_1"
+"account_id":"act_830580884293323",
+"access_token":"EAAV8gZAY7XdEBQ4emqP8U86yJZC0aLVWMmqmbiTbS7A0KQlRsV2lqQOxgnZBVLJmFwYFabb6wet3NPmklpmflLlqDCmS47kCCi7fA2WNvOJkqjHm6Hn4GjYaeQTjzrM9Y2OrXVgCA1c8Kpvwqx9jO5JgPZAYatrZBHd2iKyJ0nvWtARR5m9u0lX4BIjk8rDwjTEWD6ZAWqUNgNsv5J820iZCrRkiuo2xCo8MKmU"
 },
 {
-"account_id":"act_XXXXXXXX",
-"access_token":"TOKEN_2"
+"account_id":"act_415698175733898",
+"access_token":"EAAV8gZAY7XdEBQ4emqP8U86yJZC0aLVWMmqmbiTbS7A0KQlRsV2lqQOxgnZBVLJmFwYFabb6wet3NPmklpmflLlqDCmS47kCCi7fA2WNvOJkqjHm6Hn4GjYaeQTjzrM9Y2OrXVgCA1c8Kpvwqx9jO5JgPZAYatrZBHd2iKyJ0nvWtARR5m9u0lX4BIjk8rDwjTEWD6ZAWqUNgNsv5J820iZCrRkiuo2xCo8MKmU"
 }
 ]
 
