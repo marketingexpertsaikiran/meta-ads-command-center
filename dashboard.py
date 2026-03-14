@@ -5,18 +5,48 @@ import plotly.express as px
 
 st.set_page_config(page_title="Meta Ads Command Center", layout="wide")
 
-st.title("🚀 Meta Ads AI Performance Command Center")
+st.markdown("""
+<style>
+.main-title {
+    font-size:40px;
+    font-weight:700;
+}
+.card {
+    padding:15px;
+    border-radius:10px;
+    background-color:#111827;
+    color:white;
+}
+</style>
+""", unsafe_allow_html=True)
 
-ACCESS_TOKEN = "EAAV8gZAY7XdEBQ3dfxz5UOYeQ7IB7qo1kcRFZAhE6xKVXHHlZAgowXSlUZARgQixjvdxX6uE9hSJpr76YSifh0SM7WZCkSDPsQc5XQ5ifTD0Edu4drr2rxfa7dgxdCZBWnzJ2oEWZBkZB07tYZARbkoVlFgMuHLj1lSevYD7SCpz8o8qLTdjfbJEdNCP5YUooEeYWZB7ZCiZBSXzhae54SZBTk2sZCoLfNLUnhibj0YTBUmLWQjZC0y9fLZApfDse67lYmc83rsu5ZAkvZAlnT5hRrrMV5Qb6p1HyM"
-AD_ACCOUNT = "act_830580884293323"
+st.markdown('<p class="main-title">🚀 Meta Ads AI Command Center</p>', unsafe_allow_html=True)
 
-date_preset = st.selectbox(
-    "Select Date Range",
+# -------- MULTI ACCOUNT CONFIG --------
+
+accounts = {
+    "Account 1": {
+        "account_id": "act_830580884293323",
+        "access_token": "EAAV8gZAY7XdEBQ7qsPauJ5ewD8NwX4HF40bqZBaYNZAQKAL0wdCgA9y1YL9jYwTZCUEpyNNU9N3zgUZBr5Ty3gcMGShxbEW8FtonsalL6pSiRZCWY6ZAlhjTnUIhpeLHHrsuXlvdRCo6ZBdu9OpE8Xf7zDs4KixzLskgntEmaIZBA3jzYO3a2idZCi5I8pusy8CX2D0TZCrQWeRaGZB3il4Wrdxp9lzxAME3NMggnZBxLZC0OQns46J7SKRhgmFYaqDc4V7ZCU62wUwikoFnZC0O5F3q3kDJUydHswZDZD"
+    },
+    "Account 2": {
+        "account_id": "act_415698175733898",
+        "access_token": "EAAV8gZAY7XdEBQ7qsPauJ5ewD8NwX4HF40bqZBaYNZAQKAL0wdCgA9y1YL9jYwTZCUEpyNNU9N3zgUZBr5Ty3gcMGShxbEW8FtonsalL6pSiRZCWY6ZAlhjTnUIhpeLHHrsuXlvdRCo6ZBdu9OpE8Xf7zDs4KixzLskgntEmaIZBA3jzYO3a2idZCi5I8pusy8CX2D0TZCrQWeRaGZB3il4Wrdxp9lzxAME3NMggnZBxLZC0OQns46J7SKRhgmFYaqDc4V7ZCU62wUwikoFnZC0O5F3q3kDJUydHswZDZD"
+    }
+}
+
+selected_account = st.sidebar.selectbox("Select Ad Account", list(accounts.keys()))
+
+ACCESS_TOKEN = accounts[selected_account]["access_token"]
+AD_ACCOUNT = accounts[selected_account]["account_id"]
+
+date_preset = st.sidebar.selectbox(
+    "Date Range",
     ["today","yesterday","last_7d","last_30d"]
 )
 
-level = st.selectbox(
-    "Breakdown Level",
+level = st.sidebar.selectbox(
+    "Data Level",
     ["campaign","adset","ad"]
 )
 
@@ -44,43 +74,39 @@ if data:
         if col in df.columns:
             df[col] = df[col].astype(float)
 
-    # KPI METRICS
+    # ---------- KPI DASHBOARD ----------
 
-    col1,col2,col3,col4 = st.columns(4)
+    c1,c2,c3,c4 = st.columns(4)
 
     if "spend" in df.columns:
-        col1.metric("Total Spend", f"${df['spend'].sum():.2f}")
+        c1.metric("Total Spend", f"${df['spend'].sum():.2f}")
 
     if "ctr" in df.columns:
-        col2.metric("Average CTR", f"{df['ctr'].mean():.2f}%")
+        c2.metric("Avg CTR", f"{df['ctr'].mean():.2f}%")
 
     if "cpc" in df.columns:
-        col3.metric("Average CPC", f"${df['cpc'].mean():.2f}")
+        c3.metric("Avg CPC", f"${df['cpc'].mean():.2f}")
 
     if "cpm" in df.columns:
-        col4.metric("Average CPM", f"${df['cpm'].mean():.2f}")
+        c4.metric("Avg CPM", f"${df['cpm'].mean():.2f}")
 
     st.divider()
 
-    # CHARTS
+    # ---------- CHARTS ----------
 
-    if "campaign_name" in df.columns:
+    chart1, chart2 = st.columns(2)
 
-        col5,col6 = st.columns(2)
+    if "campaign_name" in df.columns and "spend" in df.columns:
+        fig = px.bar(df, x="campaign_name", y="spend", title="Campaign Spend")
+        chart1.plotly_chart(fig, use_container_width=True)
 
-        if "spend" in df.columns:
-
-            fig1 = px.bar(df,x="campaign_name",y="spend",title="Spend by Campaign")
-            col5.plotly_chart(fig1,use_container_width=True)
-
-        if "ctr" in df.columns:
-
-            fig2 = px.bar(df,x="campaign_name",y="ctr",title="CTR by Campaign")
-            col6.plotly_chart(fig2,use_container_width=True)
+    if "campaign_name" in df.columns and "ctr" in df.columns:
+        fig = px.bar(df, x="campaign_name", y="ctr", title="Campaign CTR")
+        chart2.plotly_chart(fig, use_container_width=True)
 
     st.divider()
 
-    # HEALTH SCORE
+    # ---------- HEALTH SCORE ----------
 
     def health_score(row):
 
@@ -100,11 +126,11 @@ if data:
 
         return score
 
-    df["health_score"] = df.apply(health_score,axis=1)
+    df["health_score"] = df.apply(health_score, axis=1)
 
-    st.subheader("Campaign Health Score")
+    st.subheader("Campaign Health")
 
-    available_cols = [
+    cols = [
         "campaign_name",
         "adset_name",
         "ad_name",
@@ -116,109 +142,105 @@ if data:
         "health_score"
     ]
 
-    existing_cols = [col for col in available_cols if col in df.columns]
-
-    st.dataframe(df[existing_cols])
-
-    st.divider()
-
-    # PERFORMANCE ANALYZER
-
-    def performance_issue(row):
-
-        if "ctr" in row and row["ctr"] < 1:
-            return "Creative Issue"
-
-        if "cpc" in row and row["cpc"] > 2:
-            return "Audience Targeting Issue"
-
-        if "cpm" in row and row["cpm"] > 20:
-            return "Audience Too Narrow"
-
-        return "Healthy Campaign"
-
-    df["performance_issue"] = df.apply(performance_issue,axis=1)
-
-    st.subheader("Campaign Performance Analyzer")
-
-    cols = ["campaign_name","ctr","cpc","cpm","performance_issue"]
     cols = [c for c in cols if c in df.columns]
 
-    st.dataframe(df[cols])
+    st.dataframe(df[cols], use_container_width=True)
 
     st.divider()
 
-    # CREATIVE FATIGUE DETECTION
+    # ---------- PERFORMANCE ANALYZER ----------
 
-    st.subheader("Creative Fatigue Detection")
+    def analyze(row):
+
+        if "ctr" in row and row["ctr"] < 1:
+            return "Creative Problem"
+
+        if "cpc" in row and row["cpc"] > 2:
+            return "Audience Problem"
+
+        if "cpm" in row and row["cpm"] > 20:
+            return "High CPM"
+
+        return "Healthy"
+
+    df["issue"] = df.apply(analyze, axis=1)
+
+    st.subheader("Performance Analyzer")
+
+    cols = ["campaign_name","ctr","cpc","cpm","issue"]
+    cols = [c for c in cols if c in df.columns]
+
+    st.dataframe(df[cols], use_container_width=True)
+
+    st.divider()
+
+    # ---------- CREATIVE FATIGUE ----------
+
+    st.subheader("Creative Fatigue Alerts")
 
     if "frequency" in df.columns and "ctr" in df.columns:
 
         fatigue = df[(df["frequency"] > 3) & (df["ctr"] < 1.5)]
 
-        if len(fatigue) > 0:
+        if len(fatigue):
 
             for i,row in fatigue.iterrows():
 
                 st.warning(
-                    f"Creative fatigue detected in {row.get('campaign_name','Unknown')} "
-                    f"(Frequency {row['frequency']})"
+                    f"{row.get('campaign_name','Campaign')} → Creative fatigue detected"
                 )
 
         else:
 
-            st.success("No creative fatigue detected")
+            st.success("No fatigue detected")
 
     st.divider()
 
-    # SCALING ENGINE
+    # ---------- SCALING ENGINE ----------
 
-    def scaling_engine(row):
+    def scale(row):
 
-        if "ctr" in row and "cpc" in row and "frequency" in row:
+        if "ctr" in row and "cpc" in row:
 
-            if row["ctr"] > 2 and row["cpc"] < 1 and row["frequency"] < 3:
+            if row["ctr"] > 2 and row["cpc"] < 1:
                 return "Scale Budget"
 
         if "ctr" in row and row["ctr"] < 1:
-            return "Test New Creatives"
+            return "Test Creatives"
 
         if "cpc" in row and row["cpc"] > 2:
-            return "Fix Audience Targeting"
-
-        if "cpm" in row and row["cpm"] > 20:
-            return "Expand Audience"
+            return "Fix Targeting"
 
         return "Monitor"
 
-    df["scaling_signal"] = df.apply(scaling_engine,axis=1)
+    df["scale_signal"] = df.apply(scale, axis=1)
 
     st.subheader("Scaling Recommendations")
 
     for i,row in df.iterrows():
 
-        if row["scaling_signal"] == "Scale Budget":
+        if row["scale_signal"] == "Scale Budget":
 
             st.success(
-                f"{row.get('campaign_name','Campaign')} → Scale budget by 20%"
+                f"{row.get('campaign_name','Campaign')} → Scale budget 20%"
             )
 
     st.divider()
 
-    # PAUSE SIGNALS
+    # ---------- PAUSE SIGNAL ----------
 
-    st.subheader("Pause Campaign Signals")
+    st.subheader("Pause Signals")
 
     if "ctr" in df.columns and "cpc" in df.columns:
 
         pause = df[(df["ctr"] < 0.8) & (df["cpc"] > 3)]
 
-        if len(pause) > 0:
+        if len(pause):
 
             for i,row in pause.iterrows():
 
                 st.error(
-                    f"{row.get('campaign_name','Campaign')} → Recommend pausing"
+                    f"{row.get('campaign_name','Campaign')} → Recommend Pause"
                 )
 
         else:
@@ -227,7 +249,7 @@ if data:
 
     st.divider()
 
-    # AI SIGNALS
+    # ---------- AI SIGNALS ----------
 
     st.subheader("AI Optimization Signals")
 
@@ -256,44 +278,44 @@ if data:
             st.write(f"**{row.get('campaign_name','Campaign')}**")
 
             for s in signals:
-                st.write("•",s)
+                st.write("•", s)
 
     st.divider()
 
-    # BEST AUDIENCE
+    # ---------- BEST AUDIENCE ----------
 
     if level == "adset" and "ctr" in df.columns:
 
-        st.subheader("🎯 Best Audience Segments")
+        st.subheader("Best Audience Segments")
 
-        best = df.sort_values("ctr",ascending=False).head(5)
+        best = df.sort_values("ctr", ascending=False).head(5)
 
         cols = ["adset_name","ctr","cpc","cpm"]
         cols = [c for c in cols if c in df.columns]
 
-        st.dataframe(best[cols])
+        st.dataframe(best[cols], use_container_width=True)
 
-    # BEST CREATIVE
+    # ---------- BEST CREATIVE ----------
 
     if level == "ad" and "ctr" in df.columns:
 
-        st.subheader("🎨 Best Creatives")
+        st.subheader("Top Creatives")
 
-        best_ads = df.sort_values("ctr",ascending=False).head(5)
+        best = df.sort_values("ctr", ascending=False).head(5)
 
         cols = ["ad_name","ctr","cpc","spend"]
         cols = [c for c in cols if c in df.columns]
 
-        st.dataframe(best_ads[cols])
+        st.dataframe(best[cols], use_container_width=True)
 
-    # BEST CAMPAIGN
+    # ---------- BEST CAMPAIGN ----------
 
     if "ctr" in df.columns and "campaign_name" in df.columns:
 
-        best = df.sort_values("ctr",ascending=False).iloc[0]
+        best = df.sort_values("ctr", ascending=False).iloc[0]
 
         st.success(
-            f"🏆 Best Performer: {best['campaign_name']} (CTR {best['ctr']}%)"
+            f"🏆 Best Campaign → {best['campaign_name']} (CTR {best['ctr']}%)"
         )
 
 else:
