@@ -1,6 +1,4 @@
 streamlit
-pandas
 requests
+pandas
 plotly
-firebase-admin
-python-dotenv
