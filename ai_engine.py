@@ -1,56 +1,42 @@
-import pandas as pd
+import numpy as np
+from sklearn.linear_model import LinearRegression
+
+def campaign_audit(df):
+
+    results=[]
+
+    for _,r in df.iterrows():
+
+        if r.ctr < 1:
+            results.append("Creative Problem")
+
+        elif r.cpm > 20:
+            results.append("Audience Too Narrow")
+
+        elif r.frequency > 3:
+            results.append("Creative Fatigue")
+
+        elif r.cpc > 2:
+            results.append("Low Intent Traffic")
+
+        else:
+            results.append("Healthy")
+
+    df["AI_Audit"]=results
+
+    return df
 
 
-def health_score(row):
+def predict_cpa(df):
 
-    score = 100
+    df["CPA"]=df.spend/df.clicks
 
-    if row["ctr"] < 1:
-        score -= 30
+    X=np.arange(len(df)).reshape(-1,1)
+    y=df["CPA"].values
 
-    if row["cpc"] > 2:
-        score -= 20
+    model=LinearRegression()
+    model.fit(X,y)
 
-    if row["cpm"] > 20:
-        score -= 20
+    pred=model.predict([[len(df)+1]])
 
-    if row["frequency"] > 3:
-        score -= 10
-
-    return score
-
-
-def scaling_engine(row):
-
-    if row["ctr"] > 2.5 and row["cpc"] < 1:
-        return "Scale Budget"
-
-    if row["ctr"] < 1:
-        return "Creative Issue"
-
-    if row["cpm"] > 20:
-        return "Audience Narrow"
-
-    if row["frequency"] > 3:
-        return "Creative Fatigue"
-
-    return "Monitor"
-
-
-def creative_winner(df):
-
-    return df[(df["ctr"] > 2.5) & (df["cpc"] < 1)]
-
-
-def creative_fatigue(df):
-
-    return df[(df["frequency"] > 3) & (df["ctr"] < 1.5)]
-
-
-def cpa_alert(df):
-
-    df["CPA"] = df["spend"] / df["clicks"]
-
-    df["change"] = df["CPA"].pct_change()
-
-    return df[df["change"] > 0.5]
+    return pred[0]
