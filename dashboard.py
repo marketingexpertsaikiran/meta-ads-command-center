@@ -77,7 +77,7 @@ CURRENCY=account_map[selected_account]["currency"]
 
 date_preset=st.sidebar.selectbox(
 "Date Range",
-["Today","Yesterday","Last 7 days","Last 30 Days","This Month"]
+["Today","Yesterday","Last 7 days","Last 30 Days"]
 )
 
 level=st.sidebar.selectbox(
