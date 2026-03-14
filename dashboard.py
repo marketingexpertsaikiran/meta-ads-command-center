@@ -5,55 +5,63 @@ import plotly.express as px
 
 st.set_page_config(layout="wide")
 
+API = "https://graph.facebook.com/v19.0"
+
 st.title("🚀 Meta Ads AI Command Center")
 
-API="https://graph.facebook.com/v19.0"
-
-# -------- LOGIN --------
+# -------------------------------
+# SIDEBAR LOGIN
+# -------------------------------
 
 st.sidebar.header("Connect Meta")
 
-token=st.sidebar.text_input("Access Token")
+token = st.sidebar.text_input("Access Token")
 
 if not token:
     st.warning("Enter Meta Access Token")
     st.stop()
 
-# -------- FETCH AD ACCOUNTS --------
+# -------------------------------
+# GET AD ACCOUNTS
+# -------------------------------
 
-accounts_url=f"{API}/me/adaccounts"
+accounts_url = f"{API}/me/adaccounts"
 
-accounts=requests.get(accounts_url,params={
-"fields":"name,account_id,currency",
-"access_token":token
+accounts = requests.get(accounts_url, params={
+    "fields": "name,account_id,currency",
+    "access_token": token
 }).json()
 
 if "data" not in accounts:
-    st.error("Token invalid or permission missing")
+    st.error("Invalid token or missing permissions")
     st.stop()
 
-account_names=[a["name"] for a in accounts["data"]]
+account_names = [a["name"] for a in accounts["data"]]
 
-selected=st.sidebar.selectbox("Ad Account",account_names)
+selected = st.sidebar.selectbox("Ad Account", account_names)
 
-account_id=None
-currency="USD"
+account_id = None
+currency = "USD"
 
 for a in accounts["data"]:
-    if a["name"]==selected:
-        account_id=a["account_id"]
-        currency=a["currency"]
+    if a["name"] == selected:
+        account_id = a["account_id"]
+        currency = a["currency"]
 
-# -------- DATE FILTER --------
+# -------------------------------
+# DATE RANGE
+# -------------------------------
 
-date=st.sidebar.selectbox(
-"Date Range",
-["today","yesterday","last_7d","last_30d"]
+date = st.sidebar.selectbox(
+    "Date Range",
+    ["today", "yesterday", "last_7d", "last_30d"]
 )
 
-# -------- FETCH INSIGHTS --------
+# -------------------------------
+# FETCH INSIGHTS
+# -------------------------------
 
-fields="""
+fields = """
 campaign_name,
 adset_name,
 ad_name,
@@ -66,207 +74,241 @@ reach,
 impressions,
 clicks,
 unique_clicks,
-landing_page_views,
-video_plays,
+inline_link_clicks,
+inline_link_click_ctr,
+cost_per_inline_link_click,
+video_p25_watched_actions,
+video_p50_watched_actions,
+video_p75_watched_actions,
+video_p100_watched_actions,
 actions
 """
 
-url=f"{API}/act_{account_id}/insights"
+url = f"{API}/act_{account_id}/insights"
 
-data=requests.get(url,params={
-"level":"ad",
-"fields":fields,
-"date_preset":date,
-"access_token":token
+response = requests.get(url, params={
+    "level": "ad",
+    "fields": fields,
+    "date_preset": date,
+    "limit": 500,
+    "access_token": token
 }).json()
 
-if "data" not in data:
-    st.error("No insights data")
+if "data" not in response or len(response["data"]) == 0:
+    st.error("No insights data for selected range")
+    st.write(response)
     st.stop()
 
-df=pd.DataFrame(data["data"])
+df = pd.DataFrame(response["data"])
 
-# -------- CLEAN DATA --------
+# -------------------------------
+# CLEAN DATA
+# -------------------------------
 
-nums=[
-"spend","ctr","cpc","cpm","frequency",
-"reach","impressions","clicks"
+numeric_cols = [
+    "spend", "ctr", "cpc", "cpm", "frequency",
+    "reach", "impressions", "clicks"
 ]
 
-for n in nums:
-    if n in df:
-        df[n]=pd.to_numeric(df[n])
+for col in numeric_cols:
+    if col in df.columns:
+        df[col] = pd.to_numeric(df[col])
 
-# -------- KPI --------
+# -------------------------------
+# KPI METRICS
+# -------------------------------
 
-c1,c2,c3,c4=st.columns(4)
+c1, c2, c3, c4 = st.columns(4)
 
-c1.metric("Spend",f"{currency} {df.spend.sum():.0f}")
-c2.metric("CTR",f"{df.ctr.mean():.2f}%")
-c3.metric("CPC",f"{currency} {df.cpc.mean():.2f}")
-c4.metric("CPM",f"{currency} {df.cpm.mean():.2f}")
+c1.metric("Spend", f"{currency} {df.spend.sum():,.0f}")
+c2.metric("CTR", f"{df.ctr.mean():.2f}%")
+c3.metric("CPC", f"{currency} {df.cpc.mean():.2f}")
+c4.metric("CPM", f"{currency} {df.cpm.mean():.2f}")
 
-# -------- SPEND CHART --------
+# -------------------------------
+# SPEND CHART
+# -------------------------------
 
-fig=px.bar(df,x="campaign_name",y="spend")
+st.subheader("Campaign Spend")
 
-st.plotly_chart(fig,use_container_width=True)
+fig = px.bar(df, x="campaign_name", y="spend")
 
-# -------- HEALTH SCORE --------
+st.plotly_chart(fig, use_container_width=True)
 
-def health(r):
+# -------------------------------
+# HEALTH SCORE
+# -------------------------------
 
-    score=100
+def health(row):
 
-    if r["ctr"]<1:
-        score-=30
+    score = 100
 
-    if r["cpc"]>2:
-        score-=20
+    if row["ctr"] < 1:
+        score -= 30
 
-    if r["cpm"]>20:
-        score-=20
+    if row["cpc"] > 2:
+        score -= 20
 
-    if r["frequency"]>3:
-        score-=10
+    if row["cpm"] > 20:
+        score -= 20
+
+    if row["frequency"] > 3:
+        score -= 10
 
     return score
 
-df["health"]=df.apply(health,axis=1)
+
+df["health_score"] = df.apply(health, axis=1)
 
 st.subheader("Campaign Health")
 
-st.dataframe(df)
+st.dataframe(df[
+    ["campaign_name", "spend", "ctr", "cpc", "cpm", "frequency", "health_score"]
+])
 
-# -------- AI SCALING ENGINE --------
+# -------------------------------
+# AI OPTIMIZATION
+# -------------------------------
 
-def action(r):
+def ai_action(row):
 
-    if r["ctr"]>2 and r["cpc"]<1:
+    if row["ctr"] > 2.5 and row["cpc"] < 1:
         return "Scale Budget"
 
-    if r["ctr"]<1:
+    if row["ctr"] < 1:
         return "Creative Issue"
 
-    if r["cpm"]>20:
+    if row["cpm"] > 20:
         return "Audience Too Narrow"
 
-    if r["frequency"]>3:
+    if row["frequency"] > 3:
         return "Creative Fatigue"
 
     return "Monitor"
 
-df["AI_Action"]=df.apply(action,axis=1)
 
-st.subheader("AI Optimization")
+df["AI_Recommendation"] = df.apply(ai_action, axis=1)
 
-st.dataframe(df[[
-"campaign_name",
-"AI_Action"
-]])
+st.subheader("AI Optimization Suggestions")
 
-# -------- CREATIVE FATIGUE --------
+st.dataframe(df[["campaign_name", "AI_Recommendation"]])
+
+# -------------------------------
+# CREATIVE FATIGUE
+# -------------------------------
 
 st.subheader("Creative Fatigue")
 
-fatigue=df[(df.frequency>3)&(df.ctr<1.5)]
+fatigue = df[(df.frequency > 3) & (df.ctr < 1.5)]
 
 st.dataframe(fatigue)
 
-# -------- WINNING CREATIVES --------
+# -------------------------------
+# WINNING CREATIVES
+# -------------------------------
 
-st.subheader("Creative Winners")
+st.subheader("Winning Creatives")
 
-winners=df[(df.ctr>2.5)&(df.cpc<1)]
+winners = df[(df.ctr > 2.5) & (df.cpc < 1)]
 
 st.dataframe(winners)
 
-# -------- LANDING PAGE ANALYZER --------
+# -------------------------------
+# LANDING PAGE ANALYZER
+# -------------------------------
 
 st.subheader("Landing Page Issues")
 
-df["CVR"]=df["clicks"]/df["impressions"]
+df["CVR"] = df["clicks"] / df["impressions"]
 
-lp=df[(df.ctr>2)&(df.CVR<0.02)]
+lp_issue = df[(df.ctr > 2) & (df.CVR < 0.02)]
 
-st.dataframe(lp)
+st.dataframe(lp_issue)
 
-# -------- TARGETING FETCH --------
+# -------------------------------
+# TARGETING FETCH
+# -------------------------------
 
 st.subheader("Adset Targeting")
 
-target_url=f"{API}/act_{account_id}/adsets"
+target_url = f"{API}/act_{account_id}/adsets"
 
-targeting=requests.get(target_url,params={
-"fields":"name,targeting",
-"limit":200,
-"access_token":token
+target_data = requests.get(target_url, params={
+    "fields": "name,targeting",
+    "limit": 200,
+    "access_token": token
 }).json()
 
-if "data" in targeting:
+if "data" in target_data:
 
-    for ad in targeting["data"][:10]:
+    for ad in target_data["data"][:10]:
 
-        st.write("###",ad["name"])
+        st.write("###", ad["name"])
 
-        t=ad.get("targeting",{})
+        targeting = ad.get("targeting", {})
 
-        interests=t.get("interests",[])
+        interests = targeting.get("interests", [])
 
-        for i in interests:
+        if interests:
+            for i in interests:
+                st.write("•", i["name"])
 
-            st.write("•",i["name"])
-
-# -------- INTEREST FINDER --------
+# -------------------------------
+# INTEREST FINDER
+# -------------------------------
 
 st.subheader("Detailed Targeting Finder")
 
-keyword=st.text_input("Search Interest")
+keyword = st.text_input("Search Interest")
 
 if keyword:
 
-    interest=requests.get(
-    f"{API}/search",
-    params={
-    "type":"adinterest",
-    "q":keyword,
-    "limit":50,
-    "access_token":token
-    }).json()
+    interest_url = f"{API}/search"
 
-    if "data" in interest:
+    interest_data = requests.get(
+        interest_url,
+        params={
+            "type": "adinterest",
+            "q": keyword,
+            "limit": 50,
+            "access_token": token
+        }).json()
 
-        for i in interest["data"]:
+    if "data" in interest_data:
+
+        for i in interest_data["data"]:
 
             st.write(
-            i["name"],
-            "- Audience:",
-            i.get("audience_size","N/A")
+                i["name"],
+                "- Audience Size:",
+                i.get("audience_size", "N/A")
             )
 
-# -------- AUDIENCE OVERLAP --------
+# -------------------------------
+# AUDIENCE OVERLAP
+# -------------------------------
 
 st.subheader("Audience Overlap Detector")
 
-aud={}
+audiences = {}
 
-if "data" in targeting:
+if "data" in target_data:
 
-    for ad in targeting["data"]:
+    for ad in target_data["data"]:
 
-        ints=ad.get("targeting",{}).get("interests",[])
+        ints = ad.get("targeting", {}).get("interests", [])
 
-        aud[ad["name"]]=[i["name"] for i in ints]
+        audiences[ad["name"]] = [i["name"] for i in ints]
 
-    names=list(aud.keys())
+    names = list(audiences.keys())
 
     for i in range(len(names)):
-        for j in range(i+1,len(names)):
+        for j in range(i + 1, len(names)):
 
-            overlap=set(aud[names[i]]) & set(aud[names[j]])
+            overlap = set(audiences[names[i]]) & set(audiences[names[j]])
 
-            if len(overlap)>3:
+            if len(overlap) > 3:
 
                 st.warning(
-                f"Overlap between {names[i]} and {names[j]}"
+                    f"Audience overlap between {names[i]} and {names[j]}"
                 )
