@@ -15,17 +15,35 @@ date_preset = st.selectbox(
     ["today","yesterday","last_7d","last_30d"]
 )
 
+level = st.selectbox(
+    "Breakdown Level",
+    ["campaign","adset","ad"]
+)
+
+fields = """
+campaign_name,
+adset_name,
+ad_name,
+spend,
+ctr,
+cpc,
+cpm,
+frequency,
+impressions,
+clicks
+"""
+
 url = f"https://graph.facebook.com/v19.0/{AD_ACCOUNT}/insights"
 
 params = {
-    "level":"campaign",
-    "fields":"campaign_name,spend,ctr,cpc,cpm,impressions,clicks,frequency",
-    "date_preset":date_preset,
-    "access_token":ACCESS_TOKEN
+    "level": level,
+    "fields": fields,
+    "date_preset": date_preset,
+    "access_token": ACCESS_TOKEN
 }
 
-response = requests.get(url,params=params).json()
-data = response.get("data",[])
+response = requests.get(url, params=params).json()
+data = response.get("data", [])
 
 if data:
 
@@ -34,32 +52,27 @@ if data:
     numeric_cols = ["spend","ctr","cpc","cpm","frequency","impressions","clicks"]
 
     for col in numeric_cols:
-        df[col] = df[col].astype(float)
-
-    # KPI SECTION
+        if col in df.columns:
+            df[col] = df[col].astype(float)
 
     col1,col2,col3,col4 = st.columns(4)
 
-    col1.metric("Total Spend",f"${df['spend'].sum():.2f}")
-    col2.metric("Average CTR",f"{df['ctr'].mean():.2f}%")
-    col3.metric("Average CPC",f"${df['cpc'].mean():.2f}")
-    col4.metric("Average CPM",f"${df['cpm'].mean():.2f}")
+    col1.metric("Total Spend", f"${df['spend'].sum():.2f}")
+    col2.metric("Average CTR", f"{df['ctr'].mean():.2f}%")
+    col3.metric("Average CPC", f"${df['cpc'].mean():.2f}")
+    col4.metric("Average CPM", f"${df['cpm'].mean():.2f}")
 
     st.divider()
-
-    # CHARTS
 
     col5,col6 = st.columns(2)
 
-    fig1 = px.bar(df,x="campaign_name",y="spend",title="Spend by Campaign")
-    col5.plotly_chart(fig1,use_container_width=True)
+    fig1 = px.bar(df, x="campaign_name", y="spend", title="Spend by Campaign")
+    col5.plotly_chart(fig1, use_container_width=True)
 
-    fig2 = px.bar(df,x="campaign_name",y="ctr",title="CTR by Campaign")
-    col6.plotly_chart(fig2,use_container_width=True)
+    fig2 = px.bar(df, x="campaign_name", y="ctr", title="CTR by Campaign")
+    col6.plotly_chart(fig2, use_container_width=True)
 
     st.divider()
-
-    # HEALTH SCORE
 
     def health_score(row):
 
@@ -79,12 +92,14 @@ if data:
 
         return score
 
-    df["health_score"] = df.apply(health_score,axis=1)
+    df["health_score"] = df.apply(health_score, axis=1)
 
     st.subheader("Campaign Health Score")
 
     st.dataframe(df[[
         "campaign_name",
+        "adset_name",
+        "ad_name",
         "spend",
         "ctr",
         "cpc",
@@ -94,8 +109,6 @@ if data:
     ]])
 
     st.divider()
-
-    # PERFORMANCE ANALYZER
 
     def performance_issue(row):
 
@@ -110,7 +123,7 @@ if data:
 
         return "Healthy Campaign"
 
-    df["performance_issue"] = df.apply(performance_issue,axis=1)
+    df["performance_issue"] = df.apply(performance_issue, axis=1)
 
     st.subheader("Campaign Performance Analyzer")
 
@@ -124,15 +137,22 @@ if data:
 
     st.divider()
 
-    # CREATIVE FATIGUE DETECTION
+    def creative_fatigue(row):
+
+        if row["frequency"] > 3 and row["ctr"] < 1.5:
+            return "Creative Fatigue"
+
+        return "Healthy"
+
+    df["creative_status"] = df.apply(creative_fatigue, axis=1)
 
     st.subheader("Creative Fatigue Detection")
 
-    fatigue_campaigns = df[(df["frequency"] > 3) & (df["ctr"] < 1.5)]
+    fatigue = df[df["creative_status"] == "Creative Fatigue"]
 
-    if len(fatigue_campaigns) > 0:
+    if len(fatigue) > 0:
 
-        for i,row in fatigue_campaigns.iterrows():
+        for i,row in fatigue.iterrows():
 
             st.warning(
                 f"Creative fatigue detected in {row['campaign_name']} "
@@ -145,21 +165,35 @@ if data:
 
     st.divider()
 
-    # SCALING RECOMMENDATIONS
+    def scaling_engine(row):
+
+        if row["ctr"] > 2 and row["cpc"] < 1 and row["frequency"] < 3:
+            return "Scale Budget"
+
+        if row["ctr"] < 1:
+            return "Test New Creatives"
+
+        if row["cpc"] > 2:
+            return "Fix Audience Targeting"
+
+        if row["cpm"] > 20:
+            return "Expand Audience"
+
+        return "Monitor"
+
+    df["scaling_signal"] = df.apply(scaling_engine, axis=1)
 
     st.subheader("Scaling Recommendations")
 
     for i,row in df.iterrows():
 
-        if row["ctr"] > 2 and row["cpc"] < 1 and row["frequency"] < 3:
+        if row["scaling_signal"] == "Scale Budget":
 
             st.success(
                 f"{row['campaign_name']} → Scale budget by 20%"
             )
 
     st.divider()
-
-    # PAUSE RECOMMENDATIONS
 
     st.subheader("Pause Campaign Signals")
 
@@ -170,7 +204,8 @@ if data:
         for i,row in pause_campaigns.iterrows():
 
             st.error(
-                f"{row['campaign_name']} → Recommend pausing (CTR {row['ctr']} CPC {row['cpc']})"
+                f"{row['campaign_name']} → Recommend pausing "
+                f"(CTR {row['ctr']} CPC {row['cpc']})"
             )
 
     else:
@@ -178,8 +213,6 @@ if data:
         st.success("No campaigns require pausing")
 
     st.divider()
-
-    # AUTOMATED OPTIMIZATION SIGNALS
 
     st.subheader("AI Optimization Signals")
 
@@ -207,16 +240,34 @@ if data:
             st.write(f"**{row['campaign_name']}**")
 
             for s in signals:
-                st.write("•",s)
+                st.write("•", s)
 
     st.divider()
 
-    # BEST CAMPAIGN DETECTOR
+    if level == "adset":
 
-    best = df.sort_values("ctr",ascending=False).iloc[0]
+        st.subheader("Best Audience Detector")
+
+        best_audience = df.sort_values("ctr", ascending=False).head(5)
+
+        st.dataframe(best_audience[
+            ["adset_name","ctr","cpc","cpm"]
+        ])
+
+    if level == "ad":
+
+        st.subheader("Creative Performance Analyzer")
+
+        best_ads = df.sort_values("ctr", ascending=False).head(5)
+
+        st.dataframe(best_ads[
+            ["ad_name","ctr","cpc","spend"]
+        ])
+
+    best = df.sort_values("ctr", ascending=False).iloc[0]
 
     st.success(
-        f"🏆 Best Performing Campaign: {best['campaign_name']} "
+        f"Best Performer: {best['campaign_name']} "
         f"(CTR {best['ctr']}%)"
     )
 
