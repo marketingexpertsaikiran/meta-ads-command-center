@@ -1,85 +1,157 @@
 import streamlit as st
+import requests
+import pandas as pd
 import plotly.express as px
-from auth import login
-from meta_api import get_accounts,get_insights
-from ai_engine import campaign_audit,predict_cpa
-from competitor_ads import search_ads
-from report_generator import generate_report
 
 st.set_page_config(layout="wide")
 
-st.title("🚀 Meta Ads AI Command Center")
+APP_ID = "1544270896651729"
+APP_SECRET = "38bd5e7004efa0af270e773505daefd9"
+REDIRECT_URI = "https://meta-ads-command-center.streamlit.app/"
 
-if not login():
+GRAPH = "https://graph.facebook.com/v19.0"
+
+st.title("🚀 Meta Ads Command Center")
+
+# ---------------------------------
+# STEP 1 : LOGIN BUTTON
+# ---------------------------------
+
+login_url = f"https://www.facebook.com/v19.0/dialog/oauth?client_id={APP_ID}&redirect_uri={REDIRECT_URI}&scope=ads_read,ads_management,business_management"
+
+st.markdown(
+    f'<a href="{login_url}" target="_self"><button style="background:#1877F2;color:white;padding:10px;border-radius:8px;">Login with Meta</button></a>',
+    unsafe_allow_html=True
+)
+
+# ---------------------------------
+# STEP 2 : GET CODE FROM URL
+# ---------------------------------
+
+params = st.query_params
+
+if "code" not in params:
     st.stop()
 
-token=st.sidebar.text_input("Meta Access Token")
+code = params["code"]
 
-accounts=get_accounts(token)
+# ---------------------------------
+# STEP 3 : EXCHANGE CODE FOR TOKEN
+# ---------------------------------
 
-names=[a["name"] for a in accounts]
+token_request = requests.get(
+    f"{GRAPH}/oauth/access_token",
+    params={
+        "client_id": APP_ID,
+        "client_secret": APP_SECRET,
+        "redirect_uri": REDIRECT_URI,
+        "code": code
+    }
+).json()
 
-acc=st.sidebar.selectbox("Ad Account",names)
+access_token = token_request["access_token"]
 
-account_id=None
+st.success("Meta Account Connected")
 
-for a in accounts:
-    if a["name"]==acc:
-        account_id=a["account_id"]
+# ---------------------------------
+# STEP 4 : FETCH AD ACCOUNTS
+# ---------------------------------
 
-level=st.sidebar.selectbox("Level",["campaign","adset","ad"])
+accounts = requests.get(
+    f"{GRAPH}/me/adaccounts",
+    params={
+        "fields": "name,account_id,currency",
+        "access_token": access_token
+    }
+).json()
 
-date=st.sidebar.selectbox("Date",["yesterday","last_7d","last_30d"])
+account_names = [a["name"] for a in accounts["data"]]
 
-df=get_insights(token,account_id,level,date)
+selected_account = st.sidebar.selectbox("Ad Account", account_names)
 
-c1,c2,c3,c4=st.columns(4)
+account_id = None
+currency = "USD"
 
-c1.metric("Spend",df.spend.sum())
-c2.metric("CTR",df.ctr.mean())
-c3.metric("CPC",df.cpc.mean())
-c4.metric("CPM",df.cpm.mean())
+for a in accounts["data"]:
+    if a["name"] == selected_account:
+        account_id = a["account_id"]
+        currency = a["currency"]
 
-tabs=st.tabs(["Performance","AI Audit","Competitor Ads","Reports"])
+# ---------------------------------
+# STEP 5 : DATE FILTER
+# ---------------------------------
 
-with tabs[0]:
+date = st.sidebar.selectbox(
+    "Date Range",
+    ["today", "yesterday", "last_7d", "last_30d"]
+)
 
-    fig=px.bar(df,x="campaign_name",y="spend")
+level = st.sidebar.selectbox(
+    "Level",
+    ["campaign", "adset", "ad"]
+)
 
-    st.plotly_chart(fig,use_container_width=True)
+# ---------------------------------
+# STEP 6 : FETCH INSIGHTS
+# ---------------------------------
 
-    st.dataframe(df)
+fields = """
+campaign_name,
+adset_name,
+ad_name,
+spend,
+ctr,
+cpc,
+cpm,
+frequency,
+impressions,
+reach,
+clicks
+"""
 
-with tabs[1]:
+insights = requests.get(
+    f"{GRAPH}/act_{account_id}/insights",
+    params={
+        "fields": fields,
+        "level": level,
+        "date_preset": date,
+        "limit": 500,
+        "access_token": access_token
+    }
+).json()
 
-    df=campaign_audit(df)
+if "data" not in insights:
+    st.error("No data returned")
+    st.stop()
 
-    st.dataframe(df[["campaign_name","AI_Audit"]])
+df = pd.DataFrame(insights["data"])
 
-    pred=predict_cpa(df)
+numeric_cols = ["spend", "ctr", "cpc", "cpm", "frequency", "impressions", "reach", "clicks"]
 
-    st.metric("Predicted CPA",pred)
+for col in numeric_cols:
+    df[col] = pd.to_numeric(df[col])
 
-with tabs[2]:
+# ---------------------------------
+# STEP 7 : KPI
+# ---------------------------------
 
-    keyword=st.text_input("Search Competitor")
+c1, c2, c3, c4 = st.columns(4)
 
-    if keyword:
+c1.metric("Spend", f"{currency} {df.spend.sum():,.0f}")
+c2.metric("CTR", f"{df.ctr.mean():.2f}%")
+c3.metric("CPC", f"{currency} {df.cpc.mean():.2f}")
+c4.metric("CPM", f"{currency} {df.cpm.mean():.2f}")
 
-        ads=search_ads(keyword,token)
+# ---------------------------------
+# STEP 8 : PERFORMANCE CHART
+# ---------------------------------
 
-        st.write(ads)
+fig = px.bar(df, x="campaign_name", y="spend")
 
-with tabs[3]:
+st.plotly_chart(fig, use_container_width=True)
 
-    if st.button("Generate Client Report"):
+# ---------------------------------
+# STEP 9 : DATA TABLE
+# ---------------------------------
 
-        file=generate_report(
-            df.spend.sum(),
-            df.ctr.mean(),
-            df.cpc.mean()
-        )
-
-        with open(file,"rb") as f:
-
-            st.download_button("Download",f,"report.pdf")
+st.dataframe(df)
