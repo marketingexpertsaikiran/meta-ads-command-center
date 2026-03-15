@@ -2,56 +2,54 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-from meta_api import get_ad_accounts,get_insights,get_targeting
-from ai_engine import campaign_audit,scaling_signal
-from targeting_engine import extract_targeting
-from competitor_ads import competitor_ads
+from oauth_login import login
+from meta_api import get_accounts,get_campaign_data
+from ai_engine import audit,scaling_signal
+from budget_allocator import recommend_budget
+from competitor_ads import find_ads
 
 st.set_page_config(layout="wide")
 
-st.title("🚀 Meta Ads Command Center")
+st.title("🚀 Meta AI Command Center")
 
-token = st.text_input("EAAV8gZAY7XdEBQyFCCnJ6zjfEoWFgonqtoPjNkqRCfNAncoswVb4E4R4Nsi0IoqZBIwvYNAhu9Bb8Yh1ZCJdf39twrgW4ha6LZCx5DJA15ZCJXkonU5tZC9hcBOgVdEmZCW6MELvFaU9dy5p7qWtDZA19i0ixqFOYZANNZB2eNLggFJvaf9hErKvNW4EUDZBKJW2ncqZA9bvmpaShyN56UTrGRNr0tZBnFiS0nPfFH95L")
+login()
+
+token = st.text_input("Access Token")
 
 if token == "":
     st.stop()
 
-accounts = get_ad_accounts(token)
+accounts = get_accounts(token)
 
-account_names = [a["name"] for a in accounts]
+names = [a["name"] for a in accounts]
 
-selected = st.sidebar.selectbox("Select Ad Account",account_names)
+account = st.sidebar.selectbox("Ad Account",names)
 
 account_id = None
-currency = "USD"
 
 for a in accounts:
-
-    if a["name"] == selected:
+    if a["name"] == account:
         account_id = a["account_id"]
-        currency = a["currency"]
 
 date = st.sidebar.selectbox(
-"Date Range",
+"Date",
 ["today","yesterday","last_7d","last_30d"]
 )
 
 level = st.sidebar.selectbox(
-"Data Level",
+"Level",
 ["campaign","adset","ad"]
 )
 
-df = get_insights(account_id,token,level,date)
+df = get_campaign_data(account_id,token,date,level)
 
 if df.empty:
-    st.warning("No Data Found")
     st.stop()
 
 for col in ["spend","ctr","cpc","cpm","frequency","clicks"]:
-    if col in df.columns:
-        df[col] = pd.to_numeric(df[col])
+    df[col] = pd.to_numeric(df[col])
 
-def conversions(actions):
+def conv(actions):
 
     if actions is None:
         return 0
@@ -62,20 +60,22 @@ def conversions(actions):
 
     return 0
 
-df["conversions"] = df["actions"].apply(conversions)
+df["conversions"] = df["actions"].apply(conv)
 
 df["CPA"] = df["spend"] / df["conversions"]
 
-df["AI Audit"] = df.apply(campaign_audit,axis=1)
+df["Audit"] = df.apply(audit,axis=1)
 
-df["Scaling Signal"] = df.apply(scaling_signal,axis=1)
+df["Scaling"] = df.apply(scaling_signal,axis=1)
+
+df["Budget Advice"] = df.apply(recommend_budget,axis=1)
 
 c1,c2,c3,c4 = st.columns(4)
 
 c1.metric("Spend",round(df["spend"].sum(),2))
 c2.metric("Conversions",int(df["conversions"].sum()))
-c3.metric("Avg CTR",round(df["ctr"].mean(),2))
-c4.metric("Avg CPA",round(df["CPA"].mean(),2))
+c3.metric("CTR",round(df["ctr"].mean(),2))
+c4.metric("CPA",round(df["CPA"].mean(),2))
 
 fig = px.bar(df,x="campaign_name",y="spend")
 
@@ -85,30 +85,16 @@ st.subheader("AI Campaign Audit")
 
 st.dataframe(df)
 
-st.subheader("Creative Winners")
-
-df["score"] = df["ctr"] * df["conversions"]
-
-st.dataframe(df.sort_values("score",ascending=False).head(5))
-
 st.subheader("Creative Fatigue")
 
 st.dataframe(df[df["frequency"] > 3])
 
-st.subheader("Audience Targeting")
-
-targeting = get_targeting(account_id,token)
-
-target_df = extract_targeting(targeting)
-
-st.dataframe(target_df)
-
 st.subheader("Competitor Ad Finder")
 
-keyword = st.text_input("Competitor Brand")
+brand = st.text_input("Competitor Brand")
 
-if keyword:
+if brand:
 
-    ads = competitor_ads(keyword)
+    ads = find_ads(brand)
 
     st.write(ads)
