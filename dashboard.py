@@ -10,7 +10,7 @@ GRAPH = "https://graph.facebook.com/v19.0"
 st.title("🚀 Meta Ads Command Center")
 
 # ACCESS TOKEN
-token = st.text_input("EAAV8gZAY7XdEBQyFCCnJ6zjfEoWFgonqtoPjNkqRCfNAncoswVb4E4R4Nsi0IoqZBIwvYNAhu9Bb8Yh1ZCJdf39twrgW4ha6LZCx5DJA15ZCJXkonU5tZC9hcBOgVdEmZCW6MELvFaU9dy5p7qWtDZA19i0ixqFOYZANNZB2eNLggFJvaf9hErKvNW4EUDZBKJW2ncqZA9bvmpaShyN56UTrGRNr0tZBnFiS0nPfFH95L")
+token = st.text_input("Access Token")
 
 if token == "":
     st.stop()
