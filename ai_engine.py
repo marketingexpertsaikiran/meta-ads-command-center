@@ -1,42 +1,26 @@
-import numpy as np
-from sklearn.linear_model import LinearRegression
+def campaign_audit(row):
 
-def campaign_audit(df):
+    if row["ctr"] < 1:
+        return "Creative Issue"
 
-    results=[]
+    if row["cpc"] > 2:
+        return "Audience Issue"
 
-    for _,r in df.iterrows():
+    if row["cpm"] > 20:
+        return "High CPM"
 
-        if r.ctr < 1:
-            results.append("Creative Problem")
+    if row["frequency"] > 3:
+        return "Creative Fatigue"
 
-        elif r.cpm > 20:
-            results.append("Audience Too Narrow")
-
-        elif r.frequency > 3:
-            results.append("Creative Fatigue")
-
-        elif r.cpc > 2:
-            results.append("Low Intent Traffic")
-
-        else:
-            results.append("Healthy")
-
-    df["AI_Audit"]=results
-
-    return df
+    return "Healthy"
 
 
-def predict_cpa(df):
+def scaling_signal(row):
 
-    df["CPA"]=df.spend/df.clicks
+    if row["ctr"] > 2 and row["CPA"] < 20:
+        return "Scale Budget"
 
-    X=np.arange(len(df)).reshape(-1,1)
-    y=df["CPA"].values
+    if row["CPA"] > 50:
+        return "Pause Campaign"
 
-    model=LinearRegression()
-    model.fit(X,y)
-
-    pred=model.predict([[len(df)+1]])
-
-    return pred[0]
+    return "Monitor"
