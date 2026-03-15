@@ -9,14 +9,13 @@ GRAPH = "https://graph.facebook.com/v19.0"
 
 APP_ID = "1544270896651729"
 APP_SECRET = "38bd5e7004efa0af270e773505daefd9"
-
 REDIRECT_URI = "https://meta-ads-command-center.streamlit.app/"
 
 st.title("🚀 Meta Ads Command Center")
 
-# ------------------------------------------------
+# -----------------------------
 # LOGIN BUTTON
-# ------------------------------------------------
+# -----------------------------
 
 login_url = (
     f"https://www.facebook.com/v19.0/dialog/oauth?"
@@ -27,11 +26,11 @@ login_url = (
 
 st.link_button("Login with Meta", login_url)
 
-# ------------------------------------------------
-# GET ACCESS TOKEN
-# ------------------------------------------------
-
 params = st.query_params
+
+# -----------------------------
+# ACCESS TOKEN
+# -----------------------------
 
 if "access_token" not in st.session_state:
 
@@ -60,11 +59,11 @@ if "access_token" not in st.session_state:
 
 access_token = st.session_state.access_token
 
-st.success("Meta Login Successful")
+st.success("Meta Account Connected")
 
-# ------------------------------------------------
+# -----------------------------
 # FETCH AD ACCOUNTS
-# ------------------------------------------------
+# -----------------------------
 
 accounts_response = requests.get(
     f"{GRAPH}/me/adaccounts",
@@ -96,9 +95,9 @@ for a in accounts:
         account_id = a["account_id"]
         currency = a["currency"]
 
-# ------------------------------------------------
+# -----------------------------
 # FILTERS
-# ------------------------------------------------
+# -----------------------------
 
 date_range = st.sidebar.selectbox(
     "Date Range",
@@ -110,9 +109,9 @@ level = st.sidebar.selectbox(
     ["campaign","adset","ad"]
 )
 
-# ------------------------------------------------
+# -----------------------------
 # FETCH INSIGHTS
-# ------------------------------------------------
+# -----------------------------
 
 fields = """
 campaign_name,
@@ -125,7 +124,8 @@ cpm,
 frequency,
 impressions,
 reach,
-clicks
+clicks,
+actions
 """
 
 insights_response = requests.get(
@@ -146,59 +146,65 @@ if "data" not in insights_response:
 
 df = pd.DataFrame(insights_response["data"])
 
-# ------------------------------------------------
-# HANDLE EMPTY DATA
-# ------------------------------------------------
-
 if df.empty:
     st.warning("No campaign data found")
     st.stop()
 
-# ------------------------------------------------
+# -----------------------------
 # NUMERIC CONVERSION
-# ------------------------------------------------
+# -----------------------------
 
 numeric_cols = [
-"spend",
-"ctr",
-"cpc",
-"cpm",
-"frequency",
-"impressions",
-"reach",
-"clicks"
+"spend","ctr","cpc","cpm",
+"frequency","impressions",
+"reach","clicks"
 ]
 
 for col in numeric_cols:
     if col in df.columns:
         df[col] = pd.to_numeric(df[col])
 
-# ------------------------------------------------
-# KPI METRICS
-# ------------------------------------------------
+# -----------------------------
+# CONVERSION EXTRACTION
+# -----------------------------
 
-if "spend" not in df.columns:
-    df["spend"] = 0
+def get_conversions(actions):
 
-if "ctr" not in df.columns:
-    df["ctr"] = 0
+    if actions is None:
+        return 0
 
-if "cpc" not in df.columns:
-    df["cpc"] = 0
+    for a in actions:
+        if a["action_type"] == "purchase":
+            return float(a["value"])
 
-if "cpm" not in df.columns:
-    df["cpm"] = 0
+    return 0
+
+if "actions" in df.columns:
+    df["conversions"] = df["actions"].apply(get_conversions)
+else:
+    df["conversions"] = 0
+
+# -----------------------------
+# CPA CALCULATION
+# -----------------------------
+
+df["CPA"] = df["spend"] / df["conversions"]
+df["CPA"] = df["CPA"].replace([float("inf")],0)
+
+# -----------------------------
+# KPI DASHBOARD
+# -----------------------------
 
 c1,c2,c3,c4 = st.columns(4)
 
 c1.metric("Total Spend",f"{currency} {df['spend'].sum():,.0f}")
-c2.metric("Average CTR",f"{df['ctr'].mean():.2f}%")
-c3.metric("Average CPC",f"{currency} {df['cpc'].mean():.2f}")
-c4.metric("Average CPM",f"{currency} {df['cpm'].mean():.2f}")
+c2.metric("Conversions",int(df["conversions"].sum()))
+c3.metric("Average CTR",f"{df['ctr'].mean():.2f}%")
+c4.metric("Average CPA",f"{currency} {df['CPA'].mean():.2f}")
 
-# ------------------------------------------------
-# CHART
-# ------------------------------------------------
+# -----------------------------
+# SPEND CHART
+# -----------------------------
 
 if "campaign_name" in df.columns:
 
@@ -211,33 +217,64 @@ if "campaign_name" in df.columns:
 
     st.plotly_chart(fig,use_container_width=True)
 
-# ------------------------------------------------
-# AI PERFORMANCE ANALYSIS
-# ------------------------------------------------
+# -----------------------------
+# AI CAMPAIGN AUDITOR
+# -----------------------------
 
-def analyze(row):
+def ai_audit(row):
 
-    ctr = row["ctr"]
-    cpc = row["cpc"]
-    cpm = row["cpm"]
+    if row["ctr"] < 1:
+        return "⚠️ Creative Problem"
 
-    if ctr < 1:
-        return "⚠️ Creative Issue"
+    if row["cpc"] > 2:
+        return "⚠️ Audience Issue"
 
-    if cpc > 2:
-        return "⚠️ Audience Targeting Issue"
-
-    if cpm > 20:
+    if row["cpm"] > 20:
         return "⚠️ High CPM"
 
-    return "✅ Healthy Campaign"
+    if row["frequency"] > 3:
+        return "⚠️ Creative Fatigue"
 
-df["AI Insight"] = df.apply(analyze,axis=1)
+    return "✅ Healthy"
 
-# ------------------------------------------------
+df["AI Audit"] = df.apply(ai_audit,axis=1)
+
+# -----------------------------
+# CREATIVE WINNER DETECTION
+# -----------------------------
+
+df["Winner Score"] = df["ctr"] * df["conversions"]
+
+winner = df.sort_values("Winner Score",ascending=False).head(1)
+
+st.subheader("🏆 Creative Winner")
+
+st.dataframe(winner)
+
+# -----------------------------
+# CPA ALERTS
+# -----------------------------
+
+st.subheader("🚨 High CPA Campaigns")
+
+high_cpa = df[df["CPA"] > df["CPA"].mean()*1.5]
+
+st.dataframe(high_cpa)
+
+# -----------------------------
+# CREATIVE FATIGUE
+# -----------------------------
+
+st.subheader("🎨 Creative Fatigue")
+
+fatigue = df[df["frequency"] > 3]
+
+st.dataframe(fatigue)
+
+# -----------------------------
 # PERFORMANCE TABLE
-# ------------------------------------------------
+# -----------------------------
 
-st.subheader("Campaign Performance")
+st.subheader("Full Performance Data")
 
 st.dataframe(df,use_container_width=True)
