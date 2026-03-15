@@ -1,10 +1,10 @@
-def campaign_audit(row):
+def audit(row):
 
     if row["ctr"] < 1:
-        return "Creative Issue"
+        return "Creative Problem"
 
     if row["cpc"] > 2:
-        return "Audience Issue"
+        return "Audience Problem"
 
     if row["cpm"] > 20:
         return "High CPM"
