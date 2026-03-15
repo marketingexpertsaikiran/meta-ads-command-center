@@ -13,12 +13,12 @@ def get_accounts(token):
         "access_token":token
     }
 
-    res = requests.get(url,params=params).json()
+    response = requests.get(url,params=params).json()
 
-    return res.get("data",[])
+    return response.get("data",[])
 
 
-def get_campaign_data(account,token,date,level):
+def get_campaign_data(account_id,token,date,level):
 
     fields = """
     campaign_name,
@@ -35,7 +35,7 @@ def get_campaign_data(account,token,date,level):
     actions
     """
 
-    url = f"{GRAPH}/act_{account}/insights"
+    url = f"{GRAPH}/act_{account_id}/insights"
 
     params = {
         "fields":fields,
@@ -45,8 +45,8 @@ def get_campaign_data(account,token,date,level):
         "access_token":token
     }
 
-    res = requests.get(url,params=params).json()
+    response = requests.get(url,params=params).json()
 
-    df = pd.DataFrame(res.get("data",[]))
+    df = pd.DataFrame(response.get("data",[]))
 
     return df
