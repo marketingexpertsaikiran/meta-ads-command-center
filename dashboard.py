@@ -9,8 +9,8 @@ GRAPH = "https://graph.facebook.com/v19.0"
 
 st.title("🚀 Meta Ads Command Center")
 
-# ACCESS TOKEN
-token = st.text_input("Access Token")
+# HIDDEN ACCESS TOKEN
+token = st.text_input("Enter Meta Access Token", type="password")
 
 if token == "":
     st.stop()
@@ -159,11 +159,17 @@ def audit(row):
 
 df["AI Audit"] = df.apply(audit, axis=1)
 
-st.subheader("🤖 AI Campaign Audit")
+# CUSTOM COLUMN SELECTOR
+st.sidebar.subheader("Customize Metrics")
 
-st.dataframe(df[[
+available_columns = [
     "campaign_name",
+    "adset_name",
+    "ad_name",
     "spend",
+    "impressions",
+    "reach",
+    "clicks",
     "ctr",
     "cpc",
     "cpm",
@@ -171,7 +177,27 @@ st.dataframe(df[[
     "conversions",
     "CPA",
     "AI Audit"
-]])
+]
+
+selected_columns = st.sidebar.multiselect(
+    "Select Metrics",
+    available_columns,
+    default=[
+        "campaign_name",
+        "spend",
+        "impressions",
+        "clicks",
+        "ctr",
+        "cpc",
+        "cpm",
+        "conversions",
+        "CPA"
+    ]
+)
+
+st.subheader("📊 Performance Table")
+
+st.dataframe(df[selected_columns], use_container_width=True)
 
 # CREATIVE WINNER
 df["Winner Score"] = df["ctr"] * df["conversions"]
@@ -180,21 +206,21 @@ st.subheader("🏆 Creative Winners")
 
 winner = df.sort_values("Winner Score", ascending=False).head(5)
 
-st.dataframe(winner)
+st.dataframe(winner[selected_columns])
 
 # HIGH CPA ALERT
 st.subheader("🚨 High CPA Campaigns")
 
 high_cpa = df[df["CPA"] > df["CPA"].mean() * 1.5]
 
-st.dataframe(high_cpa)
+st.dataframe(high_cpa[selected_columns])
 
 # CREATIVE FATIGUE
 st.subheader("🎨 Creative Fatigue")
 
 fatigue = df[df["frequency"] > 3]
 
-st.dataframe(fatigue)
+st.dataframe(fatigue[selected_columns])
 
 # TARGETING DATA
 st.subheader("🎯 Audience Targeting Insights")
@@ -255,8 +281,3 @@ if keyword:
     ).json()
 
     st.write(ads.get("data", []))
-
-# FULL DATA
-st.subheader("📊 Full Performance Data")
-
-st.dataframe(df, use_container_width=True)
