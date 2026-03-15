@@ -29,7 +29,7 @@ background-color:#0e1117;
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🚀 Meta Ads Command Center")
+st.title("Meta Ads Command Center")
 
 # ---------- ACCESS TOKEN ----------
 token = st.text_input("Enter Meta Access Token", type="password")
