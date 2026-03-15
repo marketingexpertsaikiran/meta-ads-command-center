@@ -1,23 +1,26 @@
 import requests
 import pandas as pd
 
-API="https://graph.facebook.com/v19.0"
+GRAPH = "https://graph.facebook.com/v19.0"
 
-def get_accounts(token):
 
-    url=f"{API}/me/adaccounts"
+def get_ad_accounts(token):
 
-    r=requests.get(url,params={
+    url = f"{GRAPH}/me/adaccounts"
+
+    params = {
         "fields":"name,account_id,currency",
         "access_token":token
-    }).json()
+    }
 
-    return r["data"]
+    res = requests.get(url,params=params).json()
+
+    return res.get("data",[])
 
 
-def get_insights(token,account_id,level,date):
+def get_insights(account_id,token,level,date):
 
-    fields="""
+    fields = """
     campaign_name,
     adset_name,
     ad_name,
@@ -26,24 +29,38 @@ def get_insights(token,account_id,level,date):
     cpc,
     cpm,
     frequency,
-    reach,
     impressions,
-    clicks
+    reach,
+    clicks,
+    actions
     """
 
-    url=f"{API}/act_{account_id}/insights"
+    url = f"{GRAPH}/act_{account_id}/insights"
 
-    r=requests.get(url,params={
-        "level":level,
+    params = {
         "fields":fields,
+        "level":level,
         "date_preset":date,
         "limit":500,
         "access_token":token
-    }).json()
+    }
 
-    df=pd.DataFrame(r["data"])
+    res = requests.get(url,params=params).json()
 
-    for c in ["spend","ctr","cpc","cpm","frequency","clicks","impressions"]:
-        df[c]=pd.to_numeric(df[c])
+    df = pd.DataFrame(res.get("data",[]))
 
     return df
+
+
+def get_targeting(account_id,token):
+
+    url = f"{GRAPH}/act_{account_id}/adsets"
+
+    params = {
+        "fields":"name,targeting,optimization_goal,daily_budget",
+        "access_token":token
+    }
+
+    res = requests.get(url,params=params).json()
+
+    return res.get("data",[])
