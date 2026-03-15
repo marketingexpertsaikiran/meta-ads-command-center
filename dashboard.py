@@ -14,9 +14,9 @@ REDIRECT_URI = "https://meta-ads-command-center.streamlit.app/"
 
 st.title("🚀 Meta Ads Command Center")
 
-# ---------------------------------------------------
+# ------------------------------------------------
 # LOGIN BUTTON
-# ---------------------------------------------------
+# ------------------------------------------------
 
 login_url = (
     f"https://www.facebook.com/v19.0/dialog/oauth?"
@@ -27,47 +27,44 @@ login_url = (
 
 st.link_button("Login with Meta", login_url)
 
-# ---------------------------------------------------
-# GET AUTH CODE
-# ---------------------------------------------------
+# ------------------------------------------------
+# GET ACCESS TOKEN
+# ------------------------------------------------
 
 params = st.query_params
 
-if "code" not in params:
-    st.info("Login to connect your Meta Ad Account")
-    st.stop()
+if "access_token" not in st.session_state:
 
-code = params["code"]
+    if "code" not in params:
+        st.info("Login with Meta to continue")
+        st.stop()
 
-# ---------------------------------------------------
-# GET ACCESS TOKEN
-# ---------------------------------------------------
+    code = params["code"]
 
-token_response = requests.get(
-    f"{GRAPH}/oauth/access_token",
-    params={
-        "client_id": APP_ID,
-        "client_secret": APP_SECRET,
-        "redirect_uri": REDIRECT_URI,
-        "code": code
-    }
-).json()
+    token_response = requests.get(
+        f"{GRAPH}/oauth/access_token",
+        params={
+            "client_id": APP_ID,
+            "client_secret": APP_SECRET,
+            "redirect_uri": REDIRECT_URI,
+            "code": code
+        }
+    ).json()
 
-if "access_token" not in token_response:
+    if "access_token" not in token_response:
+        st.error("OAuth Login Failed")
+        st.write(token_response)
+        st.stop()
 
-    st.error("OAuth Error")
+    st.session_state.access_token = token_response["access_token"]
 
-    st.write(token_response)
-
-    st.stop()
-
-access_token = token_response["access_token"]
+access_token = st.session_state.access_token
 
 st.success("Meta Login Successful")
 
-# ---------------------------------------------------
+# ------------------------------------------------
 # FETCH AD ACCOUNTS
-# ---------------------------------------------------
+# ------------------------------------------------
 
 accounts_response = requests.get(
     f"{GRAPH}/me/adaccounts",
@@ -78,11 +75,8 @@ accounts_response = requests.get(
 ).json()
 
 if "data" not in accounts_response:
-
-    st.error("Failed to load ad accounts")
-
+    st.error("Unable to fetch ad accounts")
     st.write(accounts_response)
-
     st.stop()
 
 accounts = accounts_response["data"]
@@ -102,23 +96,23 @@ for a in accounts:
         account_id = a["account_id"]
         currency = a["currency"]
 
-# ---------------------------------------------------
+# ------------------------------------------------
 # FILTERS
-# ---------------------------------------------------
+# ------------------------------------------------
 
 date_range = st.sidebar.selectbox(
     "Date Range",
-    ["today", "yesterday", "last_7d", "last_30d"]
+    ["today","yesterday","last_7d","last_30d"]
 )
 
 level = st.sidebar.selectbox(
-    "Level",
-    ["campaign", "adset", "ad"]
+    "Data Level",
+    ["campaign","adset","ad"]
 )
 
-# ---------------------------------------------------
+# ------------------------------------------------
 # FETCH INSIGHTS
-# ---------------------------------------------------
+# ------------------------------------------------
 
 fields = """
 campaign_name,
@@ -146,48 +140,65 @@ insights_response = requests.get(
 ).json()
 
 if "data" not in insights_response:
-
     st.error("Insights API Error")
-
     st.write(insights_response)
-
     st.stop()
 
 df = pd.DataFrame(insights_response["data"])
 
-# ---------------------------------------------------
-# NUMERIC CONVERSION
-# ---------------------------------------------------
+# ------------------------------------------------
+# HANDLE EMPTY DATA
+# ------------------------------------------------
 
-cols = [
-    "spend",
-    "ctr",
-    "cpc",
-    "cpm",
-    "frequency",
-    "impressions",
-    "reach",
-    "clicks"
+if df.empty:
+    st.warning("No campaign data found")
+    st.stop()
+
+# ------------------------------------------------
+# NUMERIC CONVERSION
+# ------------------------------------------------
+
+numeric_cols = [
+"spend",
+"ctr",
+"cpc",
+"cpm",
+"frequency",
+"impressions",
+"reach",
+"clicks"
 ]
 
-for col in cols:
+for col in numeric_cols:
     if col in df.columns:
         df[col] = pd.to_numeric(df[col])
 
-# ---------------------------------------------------
-# KPIs
-# ---------------------------------------------------
+# ------------------------------------------------
+# KPI METRICS
+# ------------------------------------------------
 
-c1, c2, c3, c4 = st.columns(4)
+if "spend" not in df.columns:
+    df["spend"] = 0
 
-c1.metric("Total Spend", f"{currency} {df.spend.sum():,.0f}")
-c2.metric("Avg CTR", f"{df.ctr.mean():.2f}%")
-c3.metric("Avg CPC", f"{currency} {df.cpc.mean():.2f}")
-c4.metric("Avg CPM", f"{currency} {df.cpm.mean():.2f}")
+if "ctr" not in df.columns:
+    df["ctr"] = 0
 
-# ---------------------------------------------------
+if "cpc" not in df.columns:
+    df["cpc"] = 0
+
+if "cpm" not in df.columns:
+    df["cpm"] = 0
+
+c1,c2,c3,c4 = st.columns(4)
+
+c1.metric("Total Spend",f"{currency} {df['spend'].sum():,.0f}")
+c2.metric("Average CTR",f"{df['ctr'].mean():.2f}%")
+c3.metric("Average CPC",f"{currency} {df['cpc'].mean():.2f}")
+c4.metric("Average CPM",f"{currency} {df['cpm'].mean():.2f}")
+
+# ------------------------------------------------
 # CHART
-# ---------------------------------------------------
+# ------------------------------------------------
 
 if "campaign_name" in df.columns:
 
@@ -198,31 +209,35 @@ if "campaign_name" in df.columns:
         title="Campaign Spend"
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig,use_container_width=True)
 
-# ---------------------------------------------------
-# AI INSIGHTS
-# ---------------------------------------------------
+# ------------------------------------------------
+# AI PERFORMANCE ANALYSIS
+# ------------------------------------------------
 
 def analyze(row):
 
-    if row["ctr"] < 1:
-        return "Creative Issue"
+    ctr = row["ctr"]
+    cpc = row["cpc"]
+    cpm = row["cpm"]
 
-    if row["cpc"] > 2:
-        return "Audience Issue"
+    if ctr < 1:
+        return "⚠️ Creative Issue"
 
-    if row["cpm"] > 20:
-        return "High CPM"
+    if cpc > 2:
+        return "⚠️ Audience Targeting Issue"
 
-    return "Healthy"
+    if cpm > 20:
+        return "⚠️ High CPM"
 
-df["AI Insight"] = df.apply(analyze, axis=1)
+    return "✅ Healthy Campaign"
 
-# ---------------------------------------------------
-# TABLE
-# ---------------------------------------------------
+df["AI Insight"] = df.apply(analyze,axis=1)
 
-st.subheader("Performance Data")
+# ------------------------------------------------
+# PERFORMANCE TABLE
+# ------------------------------------------------
 
-st.dataframe(df)
+st.subheader("Campaign Performance")
+
+st.dataframe(df,use_container_width=True)
