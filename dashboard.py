@@ -5,50 +5,51 @@ import plotly.express as px
 
 st.set_page_config(layout="wide")
 
-GRAPH = "https://graph.facebook.com/v19.0"
+GRAPH="https://graph.facebook.com/v19.0"
 
-# ---------- META STYLE UI ----------
+# ---------------- META STYLE UI ----------------
+
 st.markdown("""
 <style>
+
 body {
 background-color:#0e1117;
 color:white;
 }
 
 [data-testid="metric-container"] {
-background-color:#161b22;
+background:#161b22;
 padding:20px;
 border-radius:10px;
 border:1px solid #30363d;
 }
 
-.sidebar .sidebar-content {
-background-color:#0e1117;
-}
-
 </style>
-""", unsafe_allow_html=True)
+""",unsafe_allow_html=True)
 
-st.title("Meta Ads Command Center")
+st.title("🚀 Meta Ads Command Center")
 
-# ---------- ACCESS TOKEN ----------
-token = st.text_input("Enter Meta Access Token", type="password")
+# ---------------- ACCESS TOKEN ----------------
 
-if token == "":
+token=st.text_input("Enter Meta Access Token",type="password")
+
+if token=="":
     st.stop()
 
-# ---------- FETCH AD ACCOUNTS ----------
-accounts_res = requests.get(
+# ---------------- FETCH AD ACCOUNTS ----------------
+
+accounts_res=requests.get(
 f"{GRAPH}/me/adaccounts",
 params={
 "fields":"name,account_id,currency",
 "access_token":token
 }).json()
 
-accounts = accounts_res.get("data",[])
+accounts=accounts_res.get("data",[])
 
 if len(accounts)==0:
-    st.error("No ad accounts found")
+
+    st.error("No Ad Accounts Found")
     st.stop()
 
 account_names=[a["name"] for a in accounts]
@@ -59,11 +60,14 @@ account_id=None
 currency="USD"
 
 for a in accounts:
+
     if a["name"]==selected_account:
+
         account_id=a["account_id"]
         currency=a["currency"]
 
-# ---------- FILTERS ----------
+# ---------------- FILTERS ----------------
+
 date_range=st.sidebar.selectbox(
 "Date Range",
 ["today","yesterday","last_7d","last_30d","last_90d"]
@@ -74,7 +78,8 @@ level=st.sidebar.selectbox(
 ["campaign","adset","ad"]
 )
 
-# ---------- FETCH DATA ----------
+# ---------------- FETCH INSIGHTS ----------------
+
 fields="""
 campaign_name,
 adset_name,
@@ -103,56 +108,120 @@ params={
 df=pd.DataFrame(insights.get("data",[]))
 
 if df.empty:
-    st.warning("No data found")
+
+    st.warning("No Data Found")
     st.stop()
 
-# ---------- NUMERIC ----------
-for col in ["spend","ctr","cpc","cpm","frequency","impressions","reach","clicks"]:
+# ---------------- NUMERIC CONVERSION ----------------
+
+num_cols=[
+"spend","ctr","cpc","cpm",
+"frequency","impressions",
+"reach","clicks"
+]
+
+for col in num_cols:
+
     if col in df.columns:
+
         df[col]=pd.to_numeric(df[col])
 
-# ---------- CONVERSIONS ----------
-def conv(actions):
+# ---------------- CONVERSIONS ----------------
+
+def conversions(actions):
 
     if actions is None:
         return 0
 
-    if isinstance(actions,float):
-        return 0
-
-    conversions=0
+    total=0
 
     try:
+
         for a in actions:
 
-            if a.get("action_type")=="purchase":
-                conversions+=float(a.get("value",0))
+            if a["action_type"] in ["purchase","lead"]:
 
-            if a.get("action_type")=="lead":
-                conversions+=float(a.get("value",0))
+                total+=float(a["value"])
 
     except:
         return 0
 
-    return conversions
+    return total
 
-df["conversions"]=df["actions"].apply(conv)
+df["conversions"]=df["actions"].apply(conversions)
 
-# ---------- SAFE CPA ----------
+# ---------------- REVENUE ----------------
+
+def revenue(actions):
+
+    if actions is None:
+        return 0
+
+    value=0
+
+    try:
+
+        for a in actions:
+
+            if a["action_type"]=="purchase":
+
+                value+=float(a["value"])
+
+    except:
+        return 0
+
+    return value
+
+df["revenue"]=df["actions"].apply(revenue)
+
+# ---------------- CPA ----------------
+
 df["CPA"]=df.apply(
-lambda x: x["spend"]/x["conversions"] if x["conversions"]>0 else 0,
+lambda x:x["spend"]/x["conversions"] if x["conversions"]>0 else 0,
 axis=1
 )
 
-# ---------- KPI CARDS ----------
-c1,c2,c3,c4=st.columns(4)
+# ---------------- ROAS ----------------
 
-c1.metric("Total Spend",f"{currency} {df['spend'].sum():,.0f}")
+df["ROAS"]=df.apply(
+lambda x:x["revenue"]/x["spend"] if x["spend"]>0 else 0,
+axis=1
+)
+
+# ---------------- HEALTH SCORE ----------------
+
+def health(row):
+
+    score=0
+
+    if row["ctr"]>1:
+        score+=25
+
+    if row["cpc"]<2:
+        score+=25
+
+    if row["frequency"]<3:
+        score+=25
+
+    if row["CPA"]<df["CPA"].mean():
+        score+=25
+
+    return score
+
+df["Health Score"]=df.apply(health,axis=1)
+
+# ---------------- KPI CARDS ----------------
+
+c1,c2,c3,c4,c5=st.columns(5)
+
+c1.metric("Spend",f"{currency} {df['spend'].sum():,.0f}")
 c2.metric("Conversions",int(df["conversions"].sum()))
-c3.metric("Avg CTR",f"{df['ctr'].mean():.2f}%")
-c4.metric("Avg CPA",f"{currency} {df['CPA'].mean():.2f}")
+c3.metric("CTR",f"{df['ctr'].mean():.2f}%")
+c4.metric("CPA",f"{currency} {df['CPA'].mean():.2f}")
+c5.metric("ROAS",f"{df['ROAS'].mean():.2f}")
 
-# ---------- CHART ----------
+# ---------------- SPEND CHART ----------------
+
 if "campaign_name" in df.columns:
 
     fig=px.bar(
@@ -164,7 +233,35 @@ if "campaign_name" in df.columns:
 
     st.plotly_chart(fig,use_container_width=True)
 
-# ---------- AI AUDIT ----------
+# ---------------- FUNNEL ----------------
+
+funnel=pd.DataFrame({
+
+"Stage":[
+"Impressions",
+"Clicks",
+"Conversions"
+],
+
+"Value":[
+df["impressions"].sum(),
+df["clicks"].sum(),
+df["conversions"].sum()
+]
+
+})
+
+fig=px.funnel(
+funnel,
+x="Value",
+y="Stage",
+title="Conversion Funnel"
+)
+
+st.plotly_chart(fig,use_container_width=True)
+
+# ---------------- AI AUDIT ----------------
+
 def audit(row):
 
     if row["ctr"]<1:
@@ -183,10 +280,11 @@ def audit(row):
 
 df["AI Audit"]=df.apply(audit,axis=1)
 
-# ---------- CUSTOMIZE COLUMNS ----------
+# ---------------- COLUMN SELECTOR ----------------
+
 st.sidebar.subheader("Customize Columns")
 
-available_columns=[
+columns=[
 "campaign_name",
 "adset_name",
 "ad_name",
@@ -200,12 +298,14 @@ available_columns=[
 "frequency",
 "conversions",
 "CPA",
+"ROAS",
+"Health Score",
 "AI Audit"
 ]
 
-selected_columns=st.sidebar.multiselect(
+selected=st.sidebar.multiselect(
 "Select Metrics",
-available_columns,
+columns,
 default=[
 "campaign_name",
 "spend",
@@ -215,37 +315,75 @@ default=[
 "cpc",
 "cpm",
 "conversions",
-"CPA"
-])
+"CPA",
+"ROAS"
+]
+)
 
 st.subheader("📊 Performance Data")
 
-st.dataframe(df[selected_columns],use_container_width=True)
+st.dataframe(df[selected],use_container_width=True)
 
-# ---------- CREATIVE WINNERS ----------
+# ---------------- CREATIVE WINNERS ----------------
+
 df["Winner Score"]=df["ctr"]*df["conversions"]
 
 st.subheader("🏆 Creative Winners")
 
-winner=df.sort_values("Winner Score",ascending=False).head(5)
+winner=df.sort_values(
+"Winner Score",
+ascending=False
+).head(5)
 
-st.dataframe(winner[selected_columns])
+st.dataframe(winner[selected])
 
-# ---------- HIGH CPA ----------
-st.subheader("🚨 High CPA Campaigns")
+# ---------------- CTR LEADERBOARD ----------------
 
-high_cpa=df[df["CPA"]>df["CPA"].mean()*1.5]
+st.subheader("🔥 Top CTR Creatives")
 
-st.dataframe(high_cpa[selected_columns])
+top_ctr=df.sort_values(
+"ctr",
+ascending=False
+).head(10)
 
-# ---------- CREATIVE FATIGUE ----------
+st.dataframe(top_ctr[selected])
+
+# ---------------- HIGH CPA ----------------
+
+st.subheader("🚨 High CPA")
+
+high_cpa=df[
+df["CPA"]>df["CPA"].mean()*1.5
+]
+
+st.dataframe(high_cpa[selected])
+
+# ---------------- CREATIVE FATIGUE ----------------
+
 st.subheader("🎨 Creative Fatigue")
 
-fatigue=df[df["frequency"]>3]
+fatigue=df[
+df["frequency"]>3
+]
 
-st.dataframe(fatigue[selected_columns])
+st.dataframe(fatigue[selected])
 
-# ---------- TARGETING ----------
+# ---------------- BUDGET INSIGHTS ----------------
+
+st.subheader("💰 Budget Insights")
+
+total_spend=df["spend"].sum()
+
+if total_spend>5000:
+
+    st.warning("High Spend Alert")
+
+if df["frequency"].mean()>3:
+
+    st.warning("Creative Fatigue Detected")
+
+# ---------------- TARGETING ----------------
+
 st.subheader("🎯 Audience Targeting")
 
 adsets=requests.get(
@@ -255,7 +393,7 @@ params={
 "access_token":token
 }).json()
 
-targeting_list=[]
+target_list=[]
 
 for a in adsets.get("data",[]):
 
@@ -265,46 +403,53 @@ for a in adsets.get("data",[]):
 
     if "flexible_spec" in targeting:
 
-        for group in targeting["flexible_spec"]:
+        for g in targeting["flexible_spec"]:
 
-            if "interests" in group:
+            if "interests" in g:
 
-                for i in group["interests"]:
+                for i in g["interests"]:
+
                     interests.append(i["name"])
 
-    targeting_list.append({
+    target_list.append({
+
     "Adset":a["name"],
     "Interests":", ".join(interests),
     "Optimization":a.get("optimization_goal"),
     "Budget":a.get("daily_budget")
+
     })
 
-target_df=pd.DataFrame(targeting_list)
+target_df=pd.DataFrame(target_list)
 
 st.dataframe(target_df)
 
-# ---------- COMPETITOR RESEARCH ----------
-st.subheader("🔎 Competitor Research")
+# ---------------- COMPETITOR RESEARCH ----------------
+
+st.subheader("🔎 Competitor Ads")
 
 brand=st.text_input("Search Brand")
 
 if brand:
 
-    url="https://graph.facebook.com/v19.0/ads_archive"
+    url=f"{GRAPH}/ads_archive"
 
     params={
+
     "search_terms":brand,
     "ad_reached_countries":"IN",
     "ad_type":"ALL",
-    "fields":"page_name,ad_creative_body,ad_delivery_start_time",
-    "limit":10
+    "fields":"page_name,ad_creative_body,ad_delivery_start_time,ad_snapshot_url",
+    "limit":20,
+    "access_token":token
+
     }
 
     ads=requests.get(url,params=params).json()
 
-    ads_data=ads.get("data",[])
+    data=ads.get("data",[])
 
-    if len(ads_data)==0:
+    if len(data)==0:
 
         st.warning("No ads found")
 
@@ -312,12 +457,25 @@ if brand:
 
         ads_list=[]
 
-        for ad in ads_data:
+        for ad in data:
 
             ads_list.append({
+
             "Page":ad.get("page_name"),
             "Ad Copy":ad.get("ad_creative_body"),
-            "Start Date":ad.get("ad_delivery_start_time")
+            "Start Date":ad.get("ad_delivery_start_time"),
+            "Preview":ad.get("ad_snapshot_url")
+
             })
 
-        st.dataframe(pd.DataFrame(ads_list))
+        ads_df=pd.DataFrame(ads_list)
+
+        st.dataframe(ads_df)
+
+        for ad in ads_list:
+
+            if ad["Preview"]:
+
+                st.markdown(
+                f"[View Ad]({ad['Preview']})"
+                )
