@@ -1,8 +1,6 @@
 streamlit
-pandas
 requests
+pandas
 plotly
-scikit-learn
-firebase-admin
-fpdf
 numpy
+reportlab
