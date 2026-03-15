@@ -4,7 +4,7 @@ import pandas as pd
 GRAPH = "https://graph.facebook.com/v19.0"
 
 
-def get_ad_accounts(token):
+def get_accounts(token):
 
     url = f"{GRAPH}/me/adaccounts"
 
@@ -18,7 +18,7 @@ def get_ad_accounts(token):
     return res.get("data",[])
 
 
-def get_insights(account_id,token,level,date):
+def get_campaign_data(account,token,date,level):
 
     fields = """
     campaign_name,
@@ -35,7 +35,7 @@ def get_insights(account_id,token,level,date):
     actions
     """
 
-    url = f"{GRAPH}/act_{account_id}/insights"
+    url = f"{GRAPH}/act_{account}/insights"
 
     params = {
         "fields":fields,
@@ -50,17 +50,3 @@ def get_insights(account_id,token,level,date):
     df = pd.DataFrame(res.get("data",[]))
 
     return df
-
-
-def get_targeting(account_id,token):
-
-    url = f"{GRAPH}/act_{account_id}/adsets"
-
-    params = {
-        "fields":"name,targeting,optimization_goal,daily_budget",
-        "access_token":token
-    }
-
-    res = requests.get(url,params=params).json()
-
-    return res.get("data",[])
