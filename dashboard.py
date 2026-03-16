@@ -25,7 +25,7 @@ border:1px solid #30363d;
 </style>
 """,unsafe_allow_html=True)
 
-st.title("🚀 Meta Ads Intelligence Dashboard")
+st.title("Meta Ads Dashboard")
 
 # ---------------- LOGIN ----------------
 
